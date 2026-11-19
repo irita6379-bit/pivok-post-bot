@@ -15,3 +15,5 @@ services:
         value: pivok
       - key: ALLOWED_USER_IDS
         value: "7042397101"
+      - key: PIVOK_CHANNEL
+        value: "@pivoklaleli"

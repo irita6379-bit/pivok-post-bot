@@ -1,12 +1,12 @@
 """
-PÎVOK Post Constructor Bot — Standalone Separate Project & Bot (RU + TR)
-Supports BOTH:
-  - 24/7 Cloud Mode (Render Free Web Service via Webhook, ~45 MB RAM, zero PC needed)
-  - Local Windows Mode (Polling + auto Cloudflare Tunnel)
+PÎVOK Post Constructor Bot — Reset-Proof Standalone Cloud & Local App (RU + TR)
+- Pre-configured with @pivoklaleli + PÎVOK WhatsApp, Instagram, MY CLARISSA, ONS LINE
+- Never resets buttons/text on edits or Render server sleep (auto-syncs live pinned post from @pivoklaleli!)
 """
 
 import asyncio
 import collections
+import copy
 import hashlib
 import json
 import logging
@@ -59,12 +59,67 @@ PUBLIC_BASE_URL = (
 LOCAL_PORT = int(os.environ.get("PORT", "8085"))
 WEBHOOK_SECRET = hashlib.sha256((BOT_TOKEN + ":pivok_post_wh").encode()).hexdigest()[:32] if BOT_TOKEN else "pivok"
 
+DEFAULT_CHANNEL = os.environ.get("PIVOK_CHANNEL", "@pivoklaleli").strip()
+
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 STATE_FILE = os.path.join(DATA_DIR, "post_bot_state.json")
 
 _TUNNEL_URL: Optional[str] = None
 _SEEN_UPDATES = collections.deque(maxlen=300)
+
+# ==========================================
+# OFFICIAL PÎVOK DEFAULT POST & LINKS
+# ==========================================
+
+DEFAULT_PIVOK_TEMPLATE_TEXT = (
+    "🛍 Добро пожаловать в PÎVOK!\n\n"
+    "Оптовая женская одежда из Лалели, Стамбул.\n"
+    "✨ Эксклюзивные коллекции • 🆕 Новинки каждый день\n\n"
+    "Выбирайте коллекции, уточняйте наличие и оформляйте заказ через WhatsApp или Telegram. 🚀\n\n"
+    "🛍 Welcome to PÎVOK!\n\n"
+    "Wholesale women's clothing from Laleli, Istanbul.\n"
+    "✨ Exclusive collections • 🆕 New arrivals every day\n\n"
+    "Browse our collections, check availability and place your order via WhatsApp or Telegram. 🚀\n\n"
+    "🛍 مرحباً بكم في PÎVOK!\n\n"
+    "ملابس نسائية بالجملة من لالالي، إسطنبول.\n"
+    "✨ مجموعات حصرية • 🆕 موديلات جديدة يومياً\n\n"
+    "تصفحوا مجموعاتنا، تحققوا من التوفر واطلبوا عبر واتساب أو تيليجرام. 🚀"
+)
+
+DEFAULT_PIVOK_TEMPLATE_ROWS = [
+    [
+        {
+            "text": "WHATSAPP",
+            "url": "https://chat.whatsapp.com/Ddh7BKb1atCAhRzogy9l9Y",
+            "style": "success",
+        },
+        {
+            "text": "TELEGRAM",
+            "url": "https://t.me/pivoklaleli",
+            "style": "primary",
+        },
+    ],
+    [
+        {
+            "text": "📱 INSTAGRAM",
+            "url": "https://www.instagram.com/pivok_fashion?cnvx=MWRzeWJkaGs1MGpsaQ==",
+            "style": None,
+        },
+    ],
+    [
+        {
+            "text": "MY CLARISSA",
+            "url": "https://t.me/MYCLARISSA",
+            "style": None,
+        },
+        {
+            "text": "ONS LINE",
+            "url": "https://t.me/onslinestore",
+            "style": None,
+        },
+    ],
+]
 
 
 def get_active_webapp_base_url() -> str:
@@ -117,118 +172,91 @@ def persist_store():
 
 STRINGS = {
     "ru": {
-        "btn_template": "✨ Создать шаблон PÎVOK",
+        "btn_current": "📌 Открыть текущий пост PÎVOK",
+        "btn_reset_tpl": "🔄 Сбросить к базовому шаблону",
         "btn_lang": "🇹🇷 Türkçe / Язык",
         "btn_cancel": "❌ Отмена",
-        "btn_open_editor": "✏️ Открыть редактор кнопок",
-        "btn_edit_text": "📝 Изменить текст поста",
-        "btn_send_channel": "📨 Отправить в канал",
-        "btn_send_pin": "📌 Отправить и закрепить",
-        "btn_update_existing": "🔄 Обновить этот пост в канале",
+        "btn_open_editor": "✏️ Редактировать пост и кнопки",
+        "btn_edit_text": "📝 Изменить текст в чате",
+        "btn_update_existing": "🔄 Обновить закреп в {ch}",
+        "btn_send_pin": "📌 Опубликовать заново и закрепить",
+        "btn_send_channel": "📨 Просто отправить в {ch}",
         "btn_set_channel": "📡 Канал: {ch} (сменить)",
-        "btn_no_channel": "📡 Указать канал для публикации",
         "welcome": (
-            "🌸 **Конструктор постов и закрепки PÎVOK**\n\n"
-            "• Нажмите **«✨ Создать шаблон PÎVOK»**, чтобы получить готовую шапку канала с цветными кнопками.\n"
-            "• Или отправьте любой свой **текст / фото**, либо **перешлите готовый пост из канала** — бот сохранит все его ряды и цвета кнопок для редактирования!"
+            "🌸 **Конструктор закрепки PÎVOK (`@pivoklaleli`)**\n\n"
+            "Все ваши ссылки (WhatsApp, Telegram, Instagram, MY CLARISSA, ONS LINE) уже привязаны и **не сбрасываются**!\n\n"
+            "• Нажмите **«📌 Открыть текущий пост PÎVOK»**, чтобы отредактировать текущую закрепку канала.\n"
+            "• Любые изменения сохраняются поверх текущего поста — ничего настраивать заново не нужно."
         ),
         "lang_prompt": "🌐 **Выберите язык / Lütfen dil seçin:**",
         "lang_switched": "🇷🇺 Язык переключён на **Русский**!",
-        "preview_hint": "👆 **Предпросмотр вашего поста.** Нажмите **«✏️ Открыть редактор кнопок»**, чтобы добавить, перетащить или перекрасить кнопки.",
-        "ask_new_text": "📝 Отправьте новый текст (или фото с подписью) — все настроенные кнопки сохранятся!",
+        "preview_hint": (
+            "👆 **Текущий пост PÎVOK.**\n"
+            "Нажмите **«✏️ Редактировать пост и кнопки»**, внесите изменения (добавьте фирму, включите значок 🆕 или поправьте текст) и нажмите **«🔄 Обновить закреп»**!"
+        ),
+        "ask_new_text": "📝 Отправьте новый текст поста — **все ваши кнопки и ссылки сохранятся**!",
         "ask_channel": (
-            "📡 **Укажите канал PÎVOK для публикации:**\n\n"
-            "Отправьте `@username` канала (например `@pivokstore`) или **перешлите сюда любое сообщение из нужного канала**.\n"
-            "*(Не забудьте добавить этого бота в Администраторы канала!)*"
+            "📡 **Укажите канал для публикации:**\n"
+            "Отправьте `@username` канала (по умолчанию `@pivoklaleli`) или перешлите сообщение из него."
         ),
         "channel_saved": "✅ Канал сохранён: **{ch}**!",
-        "draft_missing": "⚠️ Черновик не найден. Отправьте пост заново.",
-        "sent_ok": "✅ Пост успешно опубликован в канале **{ch}**!",
+        "draft_saved_chat": "✅ Изменения сохранены! Проверьте предпросмотр выше и нажмите **«🔄 Обновить закреп»** (или опубликуйте заново).",
+        "sent_ok": "✅ Пост отправлен в канал **{ch}**!",
         "sent_pinned_ok": "📌 Пост опубликован и **закреплён** в канале **{ch}**!",
-        "updated_ok": "🔄 Кнопки у существующего поста в канале успешно обновлены!",
-        "cancelled": "❌ Действие отменено.",
+        "updated_ok": "✅ Закреплённый пост в канале **{ch}** успешно обновлён (без переотправки и без сброса)!",
+        "confirm_reset": "⚠️ Точно вернуть базовый стартовый шаблон PÎVOK?",
+        "yes_reset": "✅ Да, вернуть базовый шаблон",
+        "cancelled": "👌 Отменено.",
         "send_err": (
-            "❌ Не удалось отправить в канал **{ch}**.\n"
-            "Проверьте, что бот добавлен в **Администраторы** канала (с правом публикации и закрепления).\n\n"
+            "❌ Ошибка работы с каналом **{ch}**.\n"
+            "Проверьте, что этот бот добавлен в **Администраторы** канала `@pivoklaleli` (с правами на публикацию, редактирование и закрепление сообщений).\n\n"
             "Детали: `{err}`"
         ),
     },
     "tr": {
-        "btn_template": "✨ Hazır PÎVOK Şablonu",
+        "btn_current": "📌 Mevcut PÎVOK Postunu Aç",
+        "btn_reset_tpl": "🔄 Varsayılan Şablona Dön",
         "btn_lang": "🇷🇺 Русский / Dil",
         "btn_cancel": "❌ İptal",
-        "btn_open_editor": "✏️ Buton Editörünü Aç",
-        "btn_edit_text": "📝 Post Metnini Değiştir",
-        "btn_send_channel": "📨 Kanala Gönder",
-        "btn_send_pin": "📌 Gönder ve Sabitle",
-        "btn_update_existing": "🔄 Kanaldaki Postu Güncelle",
+        "btn_open_editor": "✏️ Postu ve Butonları Düzenle",
+        "btn_edit_text": "📝 Metni Sohbette Değiştir",
+        "btn_update_existing": "🔄 {ch} Sabit Postu Güncelle",
+        "btn_send_pin": "📌 Yeni Yayınla ve Sabitle",
+        "btn_send_channel": "📨 {ch} Kanalına Gönder",
         "btn_set_channel": "📡 Kanal: {ch} (değiştir)",
-        "btn_no_channel": "📡 Yayın Kanalını Belirt",
         "welcome": (
-            "🌸 **PÎVOK Sabit Post & Buton Tasarımcısı**\n\n"
-            "• Hazır renkli butonlu karşılama postu için **«✨ Hazır PÎVOK Şablonu»** butonuna basın.\n"
-            "• Veya kendi **metninizi / fotoğrafınızı** gönderin ya da **kanaldan mevcut bir postu iletin** — tüm butonları ve renkleri düzenlemek için aktarılır!"
+            "🌸 **PÎVOK Sabit Post Tasarımcısı (`@pivoklaleli`)**\n\n"
+            "Tüm linkleriniz (WhatsApp, Telegram, Instagram, MY CLARISSA, ONS LINE) tanımlandı ve **asla sıfırlanmaz**!\n\n"
+            "• Mevcut sabit postu düzenlemek için **«📌 Mevcut PÎVOK Postunu Aç»** butonuna basın."
         ),
         "lang_prompt": "🌐 **Lütfen dil seçin / Выберите язык:**",
         "lang_switched": "🇹🇷 Dil **Türkçe** olarak değiştirildi!",
-        "preview_hint": "👆 **Post önizlemesi.** Buton eklemek, sıralamak veya renklendirmek için **«✏️ Buton Editörünü Aç»** butonuna basın.",
-        "ask_new_text": "📝 Yeni metni (veya açıklamalı fotoğrafı) gönderin — ayarladığınız tüm butonlar korunacaktır!",
-        "ask_channel": (
-            "📡 **Yayınlanacak PÎVOK kanalını belirtin:**\n\n"
-            "Kanalın `@kullaniciadi` adresini yazın (örnek: `@pivokstore`) veya **kanaldan herhangi bir mesajı buraya iletin**.\n"
-            "*(Lütfen bu botu kanala Yönetici olarak eklemeyi unutmayın!)*"
+        "preview_hint": (
+            "👆 **Mevcut PÎVOK postu.**\n"
+            "**«✏️ Postu ve Butonları Düzenle»** butonuna basarak değişikliklerinizi yapın (firma ekleyin, 🆕 açın veya metni düzenleyin), ardından **«🔄 Sabit Postu Güncelle»** tuşuna basın!"
         ),
+        "ask_new_text": "📝 Yeni post metnini gönderin — **tüm butonlarınız ve linkleriniz korunacaktır**!",
+        "ask_channel": "📡 **Kanal belirtin:** `@kullaniciadi` yazın (varsayılan `@pivoklaleli`) veya kanaldan mesaj iletin.",
         "channel_saved": "✅ Kanal kaydedildi: **{ch}**!",
-        "draft_missing": "⚠️ Taslak bulunamadı. Lütfen postu tekrar gönderin.",
-        "sent_ok": "✅ Post **{ch}** kanalında başarıyla yayınlandı!",
+        "draft_saved_chat": "✅ Değişiklikler kaydedildi! Yukarıdaki önizlemeyi kontrol edip **«🔄 Sabit Postu Güncelle»** butonuna basın.",
+        "sent_ok": "✅ Post **{ch}** kanalına gönderildi!",
         "sent_pinned_ok": "📌 Post **{ch}** kanalında yayınlandı ve **sabitlendi**!",
-        "updated_ok": "🔄 Kanaldaki mevcut postun butonları başarıyla güncellendi!",
-        "cancelled": "❌ İşlem iptal edildi.",
+        "updated_ok": "✅ **{ch}** kanalındaki sabit post sıfırlanmadan başarıyla güncellendi!",
+        "confirm_reset": "⚠️ Varsayılan PÎVOK başlangıç şablonuna dönülsün mü?",
+        "yes_reset": "✅ Evet, şablona dön",
+        "cancelled": "👌 İptal edildi.",
         "send_err": (
-            "❌ **{ch}** kanalına gönderilemedi.\n"
-            "Botun kanalda **Yönetici** olduğundan (mesaj gönderme ve sabitleme yetkisiyle) emin olun.\n\n"
+            "❌ **{ch}** kanal hatası.\n"
+            "Botun `@pivoklaleli` kanalında **Yönetici** olduğundan (mesaj gönderme, düzenleme ve sabitleme yetkisiyle) emin olun.\n\n"
             "Detay: `{err}`"
         ),
     },
 }
 
-TEMPLATE_TEXTS = {STRINGS["ru"]["btn_template"], STRINGS["tr"]["btn_template"]}
+CURRENT_POST_TEXTS = {STRINGS["ru"]["btn_current"], STRINGS["tr"]["btn_current"]}
+RESET_TPL_TEXTS = {STRINGS["ru"]["btn_reset_tpl"], STRINGS["tr"]["btn_reset_tpl"]}
 LANG_TEXTS = {STRINGS["ru"]["btn_lang"], STRINGS["tr"]["btn_lang"]}
 CANCEL_TEXTS = {"❌ Отмена", "Отмена", "❌ İptal", "İptal", "iptal", "/cancel", "/stop"}
-
-DEFAULT_PIVOK_TEMPLATE_TEXT = (
-    "🛍 Добро пожаловать в PÎVOK!\n\n"
-    "Оптовая женская одежда премиум-класса из Стамбула.\n"
-    "✨ Эксклюзивные коллекции • 🆕 Новинки каждый день\n\n"
-    "Выбирайте модели, уточняйте наличие и оформляйте заказ через WhatsApp или Telegram. 🚀\n\n"
-    "🛍 Welcome to PÎVOK!\n\n"
-    "Wholesale women's fashion from Istanbul.\n"
-    "✨ Exclusive collections • 🆕 New arrivals every day\n\n"
-    "Browse our collections, check availability and place your order via WhatsApp or Telegram. 🚀\n\n"
-    "🛍 مرحباً بكم في PÎVOK!\n\n"
-    "ملابس نسائية بالجملة من إسطنبول.\n"
-    "✨ مجموعات حصرية • 🆕 موديلات جديدة يومياً\n\n"
-    "تصفحوا مجموعاتنا، تحققوا من التوفر واطلبوا عبر واتساب أو تيليجرام. 🚀"
-)
-
-DEFAULT_PIVOK_TEMPLATE_ROWS = [
-    [
-        {"text": "WHATSAPP ORDER", "url": "https://wa.me/905000000000", "style": "success"},
-        {"text": "TELEGRAM ORDER", "url": "https://t.me/pivok", "style": "primary"},
-    ],
-    [
-        {"text": "📍 STORE LOCATION", "url": "https://maps.google.com", "style": None},
-        {"text": "👗 BIG SIZE", "url": "https://t.me/pivok", "style": "danger"},
-    ],
-    [
-        {"text": "🔥 SPECIAL OFFERS", "url": "https://t.me/pivok", "style": "danger"},
-        {"text": "🌐 SHOP ONLINE", "url": "https://t.me/pivok", "style": None},
-    ],
-    [
-        {"text": "📷 VIDEO CATALOG", "url": "https://t.me/pivok", "style": None},
-        {"text": "📱 INSTAGRAM", "url": "https://instagram.com", "style": None},
-    ],
-]
 
 
 def get_lang(uid: Optional[int], tg_code: Optional[str] = None) -> str:
@@ -261,7 +289,7 @@ def reply_kb(items: list[str], cols: int = 2):
 
 
 def main_menu_kb(lang: str):
-    return reply_kb([_t(lang, "btn_template"), _t(lang, "btn_lang")], 2)
+    return reply_kb([_t(lang, "btn_current"), _t(lang, "btn_lang"), _t(lang, "btn_reset_tpl")], 2)
 
 
 def lang_inline_kb() -> InlineKeyboardMarkup:
@@ -276,7 +304,6 @@ def lang_inline_kb() -> InlineKeyboardMarkup:
 
 
 class EditorStates(StatesGroup):
-    waiting_for_post = State()
     editing_post = State()
     editing_text = State()
     waiting_for_channel = State()
@@ -324,12 +351,10 @@ dp.message.outer_middleware(SecurityMiddleware())
 dp.callback_query.outer_middleware(SecurityMiddleware())
 
 
-def get_saved_channel(uid: int) -> tuple[Optional[Any], Optional[str]]:
+def get_saved_channel(uid: int) -> tuple[Any, str]:
     d = DRAFTS.get(str(uid), {})
-    ch_id = d.get("target_channel") or STORE.get("default_channel")
-    ch_lbl = d.get("target_channel_label") or STORE.get("default_channel_label")
-    if ch_id and not ch_lbl:
-        ch_lbl = str(ch_id)
+    ch_id = d.get("target_channel") or STORE.get("default_channel") or DEFAULT_CHANNEL
+    ch_lbl = d.get("target_channel_label") or STORE.get("default_channel_label") or str(ch_id)
     return ch_id, ch_lbl
 
 
@@ -375,6 +400,94 @@ def extract_forward_channel_info(message: Message) -> tuple[Optional[Any], Optio
     return None, None, None
 
 
+async def fetch_live_pinned_from_channel(ch_id: Any) -> Optional[dict]:
+    """
+    Reads the live pinned post directly from @pivoklaleli via Telegram API so that even if
+    the cloud server restarted after sleep, the current text, buttons, and colors NEVER reset!
+    """
+    if not bot or not ch_id:
+        return None
+    try:
+        chat_obj = await bot.get_chat(ch_id)
+        pinned = getattr(chat_obj, "pinned_message", None)
+        if not pinned:
+            return None
+        rows = extract_rows_from_markup(pinned.reply_markup)
+        txt = pinned.text or pinned.caption
+        if not rows and not txt:
+            return None
+        return {
+            "text": txt or DEFAULT_PIVOK_TEMPLATE_TEXT,
+            "rows": rows if rows else copy.deepcopy(DEFAULT_PIVOK_TEMPLATE_ROWS),
+            "pinned_message_id": pinned.message_id,
+        }
+    except Exception as e:
+        logger.info(f"Could not read pinned_message from {ch_id}: {e}")
+        return None
+
+
+async def ensure_user_draft(
+    uid: int,
+    chat_id: Optional[int] = None,
+    preview_msg_id: Optional[int] = None,
+    force_sync_channel: bool = False,
+) -> dict:
+    """
+    Guarantees the user ALWAYS has an active, populated PÎVOK draft (never blank/reset!).
+    Priority:
+      1. Existing non-empty draft in memory/disk (unless force_sync_channel=True)
+      2. Live pinned message fetched straight from @pivoklaleli
+      3. Built-in PÎVOK template with @pivoklaleli, WhatsApp, Instagram, MY CLARISSA, ONS LINE
+    """
+    existing = DRAFTS.get(str(uid))
+    ch_id, ch_lbl = get_saved_channel(uid)
+
+    if existing and existing.get("rows") and not force_sync_channel:
+        if chat_id:
+            existing["chat_id"] = chat_id
+        if preview_msg_id:
+            existing["preview_message_id"] = preview_msg_id
+        return existing
+
+    live_pinned = await fetch_live_pinned_from_channel(ch_id)
+    if live_pinned:
+        draft = {
+            "chat_id": chat_id or (existing.get("chat_id") if existing else uid),
+            "template_text": live_pinned["text"],
+            "original_message_id": None,
+            "rows": live_pinned["rows"],
+            "auto_sort": existing.get("auto_sort", True) if existing else True,
+            "origin_channel_id": ch_id,
+            "origin_message_id": live_pinned["pinned_message_id"],
+            "target_channel": ch_id,
+            "target_channel_label": ch_lbl,
+            "preview_message_id": preview_msg_id or (existing.get("preview_message_id") if existing else None),
+        }
+    elif existing and existing.get("rows"):
+        if chat_id:
+            existing["chat_id"] = chat_id
+        if preview_msg_id:
+            existing["preview_message_id"] = preview_msg_id
+        return existing
+    else:
+        draft = {
+            "chat_id": chat_id or (existing.get("chat_id") if existing else uid),
+            "template_text": (existing.get("template_text") if existing and existing.get("template_text") else DEFAULT_PIVOK_TEMPLATE_TEXT),
+            "original_message_id": existing.get("original_message_id") if existing else None,
+            "rows": copy.deepcopy(DEFAULT_PIVOK_TEMPLATE_ROWS),
+            "auto_sort": True,
+            "origin_channel_id": existing.get("origin_channel_id") if existing else None,
+            "origin_message_id": existing.get("origin_message_id") if existing else None,
+            "target_channel": ch_id,
+            "target_channel_label": ch_lbl,
+            "preview_message_id": preview_msg_id or (existing.get("preview_message_id") if existing else None),
+        }
+
+    DRAFTS[str(uid)] = draft
+    persist_store()
+    return draft
+
+
 def build_post_keyboard(uid: int, lang: str, include_controls: bool = True) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     d = DRAFTS.get(str(uid), {})
@@ -393,26 +506,34 @@ def build_post_keyboard(uid: int, lang: str, include_controls: bool = True) -> I
             builder.row(*row_btns)
 
     if include_controls:
+        _, ch_lbl = get_saved_channel(uid)
         base_url = get_active_webapp_base_url()
         if base_url.startswith("https://"):
-            ed_url = f"{base_url}/?lang={lang}&uid={uid}&v={int(time.time())}"
+            cid = d.get("chat_id") or uid
+            pmid = d.get("preview_message_id") or ""
+            ed_url = f"{base_url}/?lang={lang}&uid={uid}&cid={cid}&pmid={pmid}&v={int(time.time())}"
             builder.row(
                 InlineKeyboardButton(text=_t(lang, "btn_open_editor"), web_app=WebAppInfo(url=ed_url))
             )
-        builder.row(InlineKeyboardButton(text=_t(lang, "btn_edit_text"), callback_data="pc_edit_text"))
-        builder.row(
-            InlineKeyboardButton(text=_t(lang, "btn_send_channel"), callback_data="pc_send_new"),
-            InlineKeyboardButton(text=_t(lang, "btn_send_pin"), callback_data="pc_send_pin"),
-        )
-        if d.get("origin_channel_id") and d.get("origin_message_id"):
+
+        if d.get("origin_message_id"):
             builder.row(
                 InlineKeyboardButton(
-                    text=_t(lang, "btn_update_existing"), callback_data="pc_update_inplace"
+                    text=_t(lang, "btn_update_existing", ch=ch_lbl),
+                    callback_data="pc_update_inplace",
                 )
             )
-        _, ch_lbl = get_saved_channel(uid)
-        ch_txt = _t(lang, "btn_set_channel", ch=ch_lbl) if ch_lbl else _t(lang, "btn_no_channel")
-        builder.row(InlineKeyboardButton(text=ch_txt, callback_data="pc_change_channel"))
+
+        builder.row(InlineKeyboardButton(text=_t(lang, "btn_send_pin"), callback_data="pc_send_pin"))
+        builder.row(
+            InlineKeyboardButton(text=_t(lang, "btn_edit_text"), callback_data="pc_edit_text"),
+            InlineKeyboardButton(text=_t(lang, "btn_send_channel", ch=ch_lbl), callback_data="pc_send_new"),
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=_t(lang, "btn_set_channel", ch=ch_lbl), callback_data="pc_change_channel"
+            )
+        )
 
     return builder.as_markup()
 
@@ -420,9 +541,7 @@ def build_post_keyboard(uid: int, lang: str, include_controls: bool = True) -> I
 async def render_draft_preview(chat_id: int, uid: int, lang: str):
     if not bot:
         return
-    d = DRAFTS.get(str(uid))
-    if not d:
-        return
+    d = await ensure_user_draft(uid, chat_id=chat_id)
 
     old_prev = d.get("preview_message_id")
     if old_prev:
@@ -431,47 +550,112 @@ async def render_draft_preview(chat_id: int, uid: int, lang: str):
         except Exception:
             pass
 
-    kb = build_post_keyboard(uid, lang, include_controls=True)
-    if d.get("template_text"):
+    # Send first so we know preview_message_id and embed it in the WebApp URL
+    kb_initial = build_post_keyboard(uid, lang, include_controls=True)
+    if d.get("template_text") is not None or not d.get("original_message_id"):
+        text_body = d.get("template_text") or DEFAULT_PIVOK_TEMPLATE_TEXT
         prev_msg = await bot.send_message(
-            chat_id, d["template_text"], reply_markup=kb, disable_web_page_preview=True
+            chat_id, text_body, reply_markup=kb_initial, disable_web_page_preview=True
         )
     else:
         prev_msg = await bot.copy_message(
             chat_id=chat_id,
             from_chat_id=d["chat_id"],
             message_id=d["original_message_id"],
-            reply_markup=kb,
+            reply_markup=kb_initial,
         )
+
     d["preview_message_id"] = prev_msg.message_id
+    d["chat_id"] = chat_id
     persist_store()
+
+    # Refresh control URL with exact pmid so WebApp can edit this preview message directly
+    try:
+        await bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=prev_msg.message_id,
+            reply_markup=build_post_keyboard(uid, lang, include_controls=True),
+        )
+    except Exception:
+        pass
 
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
-    await state.clear()
-    await state.set_state(EditorStates.waiting_for_post)
-    lang = get_lang(message.from_user.id, message.from_user.language_code)
+    await state.set_state(EditorStates.editing_post)
+    uid = message.from_user.id
+    lang = get_lang(uid, message.from_user.language_code)
+    await ensure_user_draft(uid, chat_id=message.chat.id, force_sync_channel=True)
+    await message.answer(_t(lang, "welcome"), reply_markup=main_menu_kb(lang), parse_mode="Markdown")
+    await render_draft_preview(message.chat.id, uid, lang)
+    await message.answer(_t(lang, "preview_hint"), parse_mode="Markdown")
+
+
+@dp.message(StateFilter("*"), F.text.in_(CURRENT_POST_TEXTS))
+async def cmd_open_current_post(message: Message, state: FSMContext):
+    await state.set_state(EditorStates.editing_post)
+    uid = message.from_user.id
+    lang = get_lang(uid, message.from_user.language_code)
+    # Sync live pinned message from @pivoklaleli if pinned on channel; otherwise preserve draft
+    await ensure_user_draft(uid, chat_id=message.chat.id, force_sync_channel=True)
+    await render_draft_preview(message.chat.id, uid, lang)
     await message.answer(
-        _t(lang, "welcome"),
-        reply_markup=main_menu_kb(lang),
-        parse_mode="Markdown",
+        _t(lang, "preview_hint"), reply_markup=main_menu_kb(lang), parse_mode="Markdown"
     )
+
+
+@dp.message(StateFilter("*"), F.text.in_(RESET_TPL_TEXTS))
+async def cmd_ask_reset_template(message: Message):
+    lang = get_lang(message.from_user.id, message.from_user.language_code)
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=_t(lang, "yes_reset"), callback_data="pc_confirm_reset")],
+            [InlineKeyboardButton(text=_t(lang, "btn_cancel"), callback_data="pc_cancel_reset")],
+        ]
+    )
+    await message.answer(_t(lang, "confirm_reset"), reply_markup=kb)
+
+
+@dp.callback_query(F.data.in_({"pc_confirm_reset", "pc_cancel_reset"}))
+async def cb_handle_reset(callback: CallbackQuery, state: FSMContext):
+    uid = callback.from_user.id
+    lang = get_lang(uid, callback.from_user.language_code)
+    await callback.answer()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    if callback.data == "pc_cancel_reset":
+        await callback.message.answer(_t(lang, "cancelled"), reply_markup=main_menu_kb(lang))
+        return
+
+    ch_id, ch_lbl = get_saved_channel(uid)
+    existing_origin_msg = DRAFTS.get(str(uid), {}).get("origin_message_id")
+    DRAFTS[str(uid)] = {
+        "chat_id": callback.message.chat.id,
+        "template_text": DEFAULT_PIVOK_TEMPLATE_TEXT,
+        "original_message_id": None,
+        "rows": copy.deepcopy(DEFAULT_PIVOK_TEMPLATE_ROWS),
+        "auto_sort": True,
+        "origin_channel_id": ch_id if existing_origin_msg else None,
+        "origin_message_id": existing_origin_msg,
+        "target_channel": ch_id,
+        "target_channel_label": ch_lbl,
+    }
+    persist_store()
+    await state.set_state(EditorStates.editing_post)
+    await render_draft_preview(callback.message.chat.id, uid, lang)
 
 
 @dp.message(Command("lang", "language", "dil"))
 @dp.message(StateFilter("*"), F.text.in_(LANG_TEXTS))
 async def cmd_language(message: Message):
     lang = get_lang(message.from_user.id, message.from_user.language_code)
-    await message.answer(
-        _t(lang, "lang_prompt"),
-        reply_markup=lang_inline_kb(),
-        parse_mode="Markdown",
-    )
+    await message.answer(_t(lang, "lang_prompt"), reply_markup=lang_inline_kb(), parse_mode="Markdown")
 
 
 @dp.callback_query(F.data.in_({"setlang_ru", "setlang_tr"}))
-async def cb_set_language(callback: CallbackQuery, state: FSMContext):
+async def cb_set_language(callback: CallbackQuery):
     new_lang = "tr" if callback.data.endswith("_tr") else "ru"
     uid = callback.from_user.id
     set_lang(uid, new_lang)
@@ -482,44 +666,19 @@ async def cb_set_language(callback: CallbackQuery, state: FSMContext):
         pass
     await bot.send_message(
         callback.message.chat.id,
-        _t(new_lang, "lang_switched") + "\n\n" + _t(new_lang, "welcome"),
+        _t(new_lang, "lang_switched"),
         reply_markup=main_menu_kb(new_lang),
         parse_mode="Markdown",
     )
-    if str(uid) in DRAFTS:
-        await render_draft_preview(callback.message.chat.id, uid, new_lang)
+    await render_draft_preview(callback.message.chat.id, uid, new_lang)
 
 
 @dp.message(Command("cancel", "stop"))
 @dp.message(StateFilter("*"), F.text.in_(CANCEL_TEXTS))
 async def cmd_cancel(message: Message, state: FSMContext):
-    await state.set_state(EditorStates.waiting_for_post)
+    await state.set_state(EditorStates.editing_post)
     lang = get_lang(message.from_user.id, message.from_user.language_code)
     await message.answer(_t(lang, "cancelled"), reply_markup=main_menu_kb(lang))
-
-
-@dp.message(StateFilter("*"), F.text.in_(TEMPLATE_TEXTS))
-async def cmd_create_pivok_template(message: Message, state: FSMContext):
-    uid = message.from_user.id
-    lang = get_lang(uid, message.from_user.language_code)
-    ch_id, ch_lbl = get_saved_channel(uid)
-    DRAFTS[str(uid)] = {
-        "chat_id": message.chat.id,
-        "template_text": DEFAULT_PIVOK_TEMPLATE_TEXT,
-        "original_message_id": None,
-        "rows": [list(map(dict, r)) for r in DEFAULT_PIVOK_TEMPLATE_ROWS],
-        "auto_sort": True,
-        "target_channel": ch_id,
-        "target_channel_label": ch_lbl,
-    }
-    persist_store()
-    await state.set_state(EditorStates.editing_post)
-    await render_draft_preview(message.chat.id, uid, lang)
-    await message.answer(
-        _t(lang, "preview_hint"),
-        reply_markup=main_menu_kb(lang),
-        parse_mode="Markdown",
-    )
 
 
 @dp.message(EditorStates.waiting_for_channel)
@@ -544,79 +703,56 @@ async def handle_channel_input(message: Message, state: FSMContext):
         ch_label = str(ch_id)
 
     set_saved_channel(uid, ch_id, ch_label)
-    pending_mode = (await state.get_data()).get("pending_publish_mode")
     await state.set_state(EditorStates.editing_post)
     await message.answer(
         _t(lang, "channel_saved", ch=ch_label),
         reply_markup=main_menu_kb(lang),
         parse_mode="Markdown",
     )
-
-    if pending_mode in ("new", "pin"):
-        await _publish_to_channel(message.chat.id, uid, lang, pin=(pending_mode == "pin"))
-    else:
-        await render_draft_preview(message.chat.id, uid, lang)
+    await render_draft_preview(message.chat.id, uid, lang)
 
 
-@dp.message(EditorStates.editing_text)
-async def handle_updated_post_text(message: Message, state: FSMContext):
+@dp.message(StateFilter(EditorStates.editing_text, EditorStates.editing_post, None))
+async def handle_post_or_text_update(message: Message, state: FSMContext):
+    """
+    NEVER wipes existing buttons!
+    - If user forwards a post that HAS buttons -> imports its text, buttons, and channel origin.
+    - If user sends plain text or photo WITHOUT buttons -> updates ONLY the text/media while KEEPING all configured buttons!
+    """
     if message.text and message.text.startswith("/"):
         return
     uid = message.from_user.id
     lang = get_lang(uid, message.from_user.language_code)
-    d = DRAFTS.get(str(uid))
-    if not d:
-        await state.set_state(EditorStates.waiting_for_post)
-        await message.answer(_t(lang, "draft_missing"))
-        return
 
-    d["chat_id"] = message.chat.id
-    d["original_message_id"] = message.message_id
-    d["template_text"] = None
+    d = await ensure_user_draft(uid, chat_id=message.chat.id)
+    incoming_rows = extract_rows_from_markup(message.reply_markup)
+    fwd_ch_id, fwd_ch_title, fwd_msg_id = extract_forward_channel_info(message)
+
+    # Preserve existing rows unless the forwarded post brings its own buttons!
+    if incoming_rows:
+        d["rows"] = incoming_rows
+
+    if fwd_ch_id is not None and fwd_msg_id is not None:
+        d["origin_channel_id"] = fwd_ch_id
+        d["origin_message_id"] = fwd_msg_id
+        set_saved_channel(uid, fwd_ch_id, fwd_ch_title or str(fwd_ch_id))
+
+    if message.text and not message.photo and not message.video and not message.document:
+        d["template_text"] = message.text
+        d["original_message_id"] = None
+    else:
+        d["chat_id"] = message.chat.id
+        d["original_message_id"] = message.message_id
+        d["template_text"] = None
+
     persist_store()
     await state.set_state(EditorStates.editing_post)
     await render_draft_preview(message.chat.id, uid, lang)
-    await message.answer(_t(lang, "preview_hint"), reply_markup=main_menu_kb(lang), parse_mode="Markdown")
-
-
-@dp.message(StateFilter(EditorStates.waiting_for_post, EditorStates.editing_post, None))
-async def handle_any_post(message: Message, state: FSMContext):
-    if message.text and message.text.startswith("/"):
-        return
-    uid = message.from_user.id
-    lang = get_lang(uid, message.from_user.language_code)
-
-    extracted_rows = extract_rows_from_markup(message.reply_markup)
-    fwd_ch_id, fwd_ch_title, fwd_msg_id = extract_forward_channel_info(message)
-
-    saved_ch_id, saved_ch_lbl = get_saved_channel(uid)
-    if fwd_ch_id is not None and not saved_ch_id:
-        set_saved_channel(uid, fwd_ch_id, fwd_ch_title or str(fwd_ch_id))
-        saved_ch_id, saved_ch_lbl = fwd_ch_id, fwd_ch_title or str(fwd_ch_id)
-
-    DRAFTS[str(uid)] = {
-        "chat_id": message.chat.id,
-        "original_message_id": message.message_id,
-        "template_text": None,
-        "rows": extracted_rows,
-        "auto_sort": True,
-        "origin_channel_id": fwd_ch_id,
-        "origin_message_id": fwd_msg_id,
-        "target_channel": saved_ch_id,
-        "target_channel_label": saved_ch_lbl,
-    }
-    persist_store()
-
-    try:
-        await state.set_state(EditorStates.editing_post)
-        await render_draft_preview(message.chat.id, uid, lang)
-        await message.answer(
-            _t(lang, "preview_hint"),
-            reply_markup=main_menu_kb(lang),
-            parse_mode="Markdown",
-        )
-    except TelegramAPIError as e:
-        await message.answer(f"❌ Error: {e}")
+    await message.answer(
+        _t(lang, "preview_hint"),
+        reply_markup=main_menu_kb(lang),
+        parse_mode="Markdown",
+    )
 
 
 @dp.callback_query(F.data == "pc_edit_text")
@@ -627,13 +763,13 @@ async def cb_edit_text(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(
         _t(lang, "ask_new_text"),
         reply_markup=reply_kb([_t(lang, "btn_cancel")], 1),
+        parse_mode="Markdown",
     )
 
 
 @dp.callback_query(F.data == "pc_change_channel")
 async def cb_change_channel(callback: CallbackQuery, state: FSMContext):
     lang = get_lang(callback.from_user.id, callback.from_user.language_code)
-    await state.update_data(pending_publish_mode=None)
     await state.set_state(EditorStates.waiting_for_channel)
     await callback.answer()
     await callback.message.answer(
@@ -646,18 +782,15 @@ async def cb_change_channel(callback: CallbackQuery, state: FSMContext):
 async def _publish_to_channel(chat_id: int, uid: int, lang: str, pin: bool = False):
     if not bot:
         return
-    d = DRAFTS.get(str(uid))
-    if not d:
-        await bot.send_message(chat_id, _t(lang, "draft_missing"))
-        return
-
+    d = await ensure_user_draft(uid, chat_id=chat_id)
     ch_id, ch_lbl = get_saved_channel(uid)
     clean_kb = build_post_keyboard(uid, lang, include_controls=False)
+
     try:
-        if d.get("template_text"):
+        if d.get("template_text") is not None or not d.get("original_message_id"):
             sent = await bot.send_message(
                 chat_id=ch_id,
-                text=d["template_text"],
+                text=d.get("template_text") or DEFAULT_PIVOK_TEMPLATE_TEXT,
                 reply_markup=clean_kb,
                 disable_web_page_preview=True,
             )
@@ -671,40 +804,44 @@ async def _publish_to_channel(chat_id: int, uid: int, lang: str, pin: bool = Fal
             )
             sent_msg_id = copied.message_id
 
+        # Remember this channel message ID so future edits can update it in-place without re-sending!
+        d["origin_channel_id"] = ch_id
+        d["origin_message_id"] = sent_msg_id
+        persist_store()
+
         if pin and sent_msg_id:
             try:
-                await bot.pin_chat_message(chat_id=ch_id, message_id=sent_msg_id, disable_notification=True)
+                await bot.pin_chat_message(
+                    chat_id=ch_id, message_id=sent_msg_id, disable_notification=True
+                )
             except Exception:
                 pass
             await bot.send_message(chat_id, _t(lang, "sent_pinned_ok", ch=ch_lbl), parse_mode="Markdown")
         else:
             await bot.send_message(chat_id, _t(lang, "sent_ok", ch=ch_lbl), parse_mode="Markdown")
+
+        # Refresh preview controls so "🔄 Обновить закреп" button is shown immediately
+        if d.get("preview_message_id"):
+            try:
+                await bot.edit_message_reply_markup(
+                    chat_id=chat_id,
+                    message_id=d["preview_message_id"],
+                    reply_markup=build_post_keyboard(uid, lang, include_controls=True),
+                )
+            except Exception:
+                pass
     except TelegramAPIError as e:
         await bot.send_message(chat_id, _t(lang, "send_err", ch=ch_lbl, err=str(e)), parse_mode="Markdown")
 
 
 @dp.callback_query(F.data.in_({"pc_send_new", "pc_send_pin"}))
-async def cb_send_to_channel(callback: CallbackQuery, state: FSMContext):
+async def cb_send_to_channel(callback: CallbackQuery):
     uid = callback.from_user.id
     lang = get_lang(uid, callback.from_user.language_code)
-    if str(uid) not in DRAFTS:
-        await callback.answer(_t(lang, "draft_missing"), show_alert=True)
-        return
-
-    pin = callback.data == "pc_send_pin"
-    ch_id, _ = get_saved_channel(uid)
     await callback.answer()
-    if not ch_id:
-        await state.update_data(pending_publish_mode="pin" if pin else "new")
-        await state.set_state(EditorStates.waiting_for_channel)
-        await callback.message.answer(
-            _t(lang, "ask_channel"),
-            reply_markup=reply_kb([_t(lang, "btn_cancel")], 1),
-            parse_mode="Markdown",
-        )
-        return
-
-    await _publish_to_channel(callback.message.chat.id, uid, lang, pin=pin)
+    await _publish_to_channel(
+        callback.message.chat.id, uid, lang, pin=(callback.data == "pc_send_pin")
+    )
 
 
 @dp.callback_query(F.data == "pc_update_inplace")
@@ -713,24 +850,51 @@ async def cb_update_inplace(callback: CallbackQuery):
         return
     uid = callback.from_user.id
     lang = get_lang(uid, callback.from_user.language_code)
-    d = DRAFTS.get(str(uid))
-    if not d or not d.get("origin_channel_id") or not d.get("origin_message_id"):
-        await callback.answer(_t(lang, "draft_missing"), show_alert=True)
-        return
+    d = await ensure_user_draft(uid, chat_id=callback.message.chat.id)
+
+    ch_id = d.get("origin_channel_id") or get_saved_channel(uid)[0]
+    msg_id = d.get("origin_message_id")
+
+    if not msg_id:
+        live = await fetch_live_pinned_from_channel(ch_id)
+        if live and live.get("pinned_message_id"):
+            msg_id = live["pinned_message_id"]
+            d["origin_channel_id"] = ch_id
+            d["origin_message_id"] = msg_id
+            persist_store()
 
     await callback.answer()
+    if not msg_id:
+        # No pinned post yet — publish & pin for the first time
+        await _publish_to_channel(callback.message.chat.id, uid, lang, pin=True)
+        return
+
     clean_kb = build_post_keyboard(uid, lang, include_controls=False)
     try:
-        await bot.edit_message_reply_markup(
-            chat_id=d["origin_channel_id"],
-            message_id=d["origin_message_id"],
-            reply_markup=clean_kb,
-        )
-        await callback.message.answer(_t(lang, "updated_ok"))
+        if d.get("template_text") is not None and not d.get("original_message_id"):
+            try:
+                await bot.edit_message_text(
+                    chat_id=ch_id,
+                    message_id=msg_id,
+                    text=d["template_text"],
+                    reply_markup=clean_kb,
+                    disable_web_page_preview=True,
+                )
+            except TelegramAPIError as te:
+                if "message is not modified" in str(te).lower():
+                    pass
+                else:
+                    await bot.edit_message_reply_markup(
+                        chat_id=ch_id, message_id=msg_id, reply_markup=clean_kb
+                    )
+        else:
+            await bot.edit_message_reply_markup(
+                chat_id=ch_id, message_id=msg_id, reply_markup=clean_kb
+            )
+        await callback.message.answer(_t(lang, "updated_ok", ch=str(ch_id)), parse_mode="Markdown")
     except TelegramAPIError as e:
         await callback.message.answer(
-            _t(lang, "send_err", ch=str(d["origin_channel_id"]), err=str(e)),
-            parse_mode="Markdown",
+            _t(lang, "send_err", ch=str(ch_id), err=str(e)), parse_mode="Markdown"
         )
 
 
@@ -748,7 +912,6 @@ def _start_local_tunnel_thread():
     ]
     cf_path = next((p for p in candidates if p and os.path.exists(p)), None)
     if not cf_path:
-        logger.warning("cloudflared not found locally; set PUBLIC_BASE_URL or deploy to Render.")
         return
 
     def _runner():
@@ -792,8 +955,6 @@ async def lifespan(app_inst: FastAPI):
             await bot.delete_webhook(drop_pending_updates=False)
             _polling_task = asyncio.create_task(dp.start_polling(bot))
             logger.info("🌸 Started local polling mode")
-    else:
-        logger.warning("⚠️ BOT_TOKEN is not configured yet!")
     yield
     if _polling_task:
         _polling_task.cancel()
@@ -822,6 +983,8 @@ async def health():
     return {
         "status": "ok",
         "service": "PIVOK Post Constructor Bot",
+        "version": "v2-persistent-links",
+        "channel": DEFAULT_CHANNEL,
         "languages": ["ru", "tr"],
         "webhook_mode": PUBLIC_BASE_URL.startswith("https://"),
     }
@@ -865,8 +1028,18 @@ async def api_get_draft(request: Request):
     uid = _resolve_webapp_uid(data)
     if not uid:
         return JSONResponse({"error": "Unauthorized"}, status_code=403)
-    d = DRAFTS.get(str(uid), {})
-    return {"rows": d.get("rows", []), "auto_sort": d.get("auto_sort", True)}
+
+    cid = int(data["cid"]) if str(data.get("cid", "")).lstrip("-").isdigit() else uid
+    pmid = int(data["pmid"]) if str(data.get("pmid", "")).isdigit() else None
+
+    d = await ensure_user_draft(uid, chat_id=cid, preview_msg_id=pmid)
+    is_media = bool(d.get("original_message_id")) and (d.get("template_text") is None)
+    return {
+        "rows": d.get("rows", []),
+        "text": d.get("template_text") or DEFAULT_PIVOK_TEMPLATE_TEXT,
+        "is_media": is_media,
+        "auto_sort": d.get("auto_sort", True),
+    }
 
 
 @app.post("/api/save_draft")
@@ -876,26 +1049,54 @@ async def api_save_draft(request: Request):
     if not uid:
         return JSONResponse({"success": False, "error": "Unauthorized"}, status_code=403)
 
-    d = DRAFTS.get(str(uid))
-    if not d:
-        return JSONResponse({"success": False, "error": "Draft not found"})
+    cid = int(data["cid"]) if str(data.get("cid", "")).lstrip("-").isdigit() else uid
+    pmid = int(data["pmid"]) if str(data.get("pmid", "")).isdigit() else None
 
-    d["rows"] = data.get("rows", [])
+    d = await ensure_user_draft(uid, chat_id=cid, preview_msg_id=pmid)
+    new_rows = data.get("rows")
+    if isinstance(new_rows, list) and len(new_rows) > 0:
+        d["rows"] = new_rows
+
+    new_text = data.get("text")
+    if isinstance(new_text, str) and new_text.strip():
+        d["template_text"] = new_text.strip()
+        d["original_message_id"] = None
+
     if "auto_sort" in data:
         d["auto_sort"] = bool(data["auto_sort"])
+
     persist_store()
 
     lang = get_lang(uid, None)
-    if bot and d.get("preview_message_id") and d.get("chat_id"):
-        try:
-            await bot.edit_message_reply_markup(
-                chat_id=d["chat_id"],
-                message_id=d["preview_message_id"],
-                reply_markup=build_post_keyboard(uid, lang, include_controls=True),
-            )
-        except Exception as e:
-            if "message is not modified" not in str(e).lower():
-                logger.warning(f"Preview update error: {e}")
+    target_chat = d.get("chat_id") or cid
+    target_pmid = d.get("preview_message_id") or pmid
+
+    if bot and target_chat:
+        kb = build_post_keyboard(uid, lang, include_controls=True)
+        updated_existing_preview = False
+        if target_pmid:
+            try:
+                if d.get("template_text") is not None and not d.get("original_message_id"):
+                    await bot.edit_message_text(
+                        chat_id=target_chat,
+                        message_id=target_pmid,
+                        text=d["template_text"],
+                        reply_markup=kb,
+                        disable_web_page_preview=True,
+                    )
+                else:
+                    await bot.edit_message_reply_markup(
+                        chat_id=target_chat, message_id=target_pmid, reply_markup=kb
+                    )
+                updated_existing_preview = True
+            except Exception as e:
+                if "message is not modified" in str(e).lower():
+                    updated_existing_preview = True
+                else:
+                    logger.warning(f"Could not edit existing preview, sending fresh preview: {e}")
+
+        if not updated_existing_preview:
+            await render_draft_preview(target_chat, uid, lang)
 
     return {"success": True}
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PÎVOK — Post Button Constructor</title>
+    <title>PÎVOK — Post & Button Constructor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -30,7 +30,7 @@
         .tg-bg-success { background-color: #3f7d3b; color: #ffffff; }
         .tg-bg-danger  { background-color: #9e473d; color: #ffffff; }
 
-        input, select {
+        input, select, textarea {
             background-color: var(--tg-theme-secondary-bg-color, #2d2635);
             color: var(--tg-theme-text-color, #ffffff);
             border: 1px solid #4b3f57;
@@ -46,14 +46,15 @@
 
     <!-- Tabs -->
     <div class="flex border-b border-gray-700 bg-[var(--tg-theme-bg-color)] z-10 shrink-0">
-        <button id="tab-editor" onclick="switchTab('editor')" class="flex-1 py-3 text-center tab-active transition text-sm"></button>
-        <button id="tab-preview" onclick="switchTab('preview')" class="flex-1 py-3 text-center tab-inactive transition text-sm"></button>
+        <button id="tab-editor" onclick="switchTab('editor')" class="flex-1 py-3 text-center tab-active transition text-xs sm:text-sm"></button>
+        <button id="tab-text" onclick="switchTab('text')" class="flex-1 py-3 text-center tab-inactive transition text-xs sm:text-sm"></button>
+        <button id="tab-preview" onclick="switchTab('preview')" class="flex-1 py-3 text-center tab-inactive transition text-xs sm:text-sm"></button>
     </div>
 
     <!-- Main Scroll Area -->
     <div class="flex-1 overflow-y-auto p-4 pb-28" id="main-scroll">
 
-        <!-- EDITOR TAB -->
+        <!-- BUTTONS TAB -->
         <div id="view-editor" class="block space-y-4">
             <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
                 <p class="text-xs text-hint" id="lbl-drag-hint"></p>
@@ -71,18 +72,18 @@
             </button>
         </div>
 
+        <!-- TEXT TAB -->
+        <div id="view-text" class="hidden space-y-3">
+            <p class="text-xs text-hint" id="lbl-text-hint"></p>
+            <textarea id="post-text-area" rows="16" class="w-full text-sm rounded-xl p-3 leading-relaxed focus:outline-none focus:border-pink-500"></textarea>
+        </div>
+
         <!-- PREVIEW TAB -->
         <div id="view-preview" class="hidden">
             <p class="text-xs text-hint mb-3 text-center" id="lbl-preview-hint"></p>
             <div class="bg-gray-800/60 p-3.5 rounded-xl border border-gray-700 max-w-md mx-auto shadow-lg">
-                <div class="flex gap-3 mb-3 opacity-60">
-                    <div class="w-9 h-9 rounded-full shrink-0 flex items-center justify-center font-bold text-xs" style="background:#5d0537; color:#d6a474;">P</div>
-                    <div class="flex-1">
-                        <div class="text-xs font-bold mb-1" style="color:#d6a474;">PÎVOK</div>
-                        <div class="h-2.5 w-full bg-gray-600 rounded mb-1"></div>
-                        <div class="h-2.5 w-2/3 bg-gray-600 rounded"></div>
-                    </div>
-                </div>
+                <div class="text-xs font-bold mb-1.5" style="color:#e879a0;">PÎVOK</div>
+                <div id="preview-text-box" class="text-xs text-gray-200 whitespace-pre-wrap mb-3 leading-relaxed max-h-56 overflow-y-auto"></div>
                 <div id="preview-container" class="space-y-1.5"></div>
             </div>
         </div>
@@ -104,23 +105,27 @@
         const urlParams = new URLSearchParams(window.location.search);
         const lang = (urlParams.get('lang') || 'ru').toLowerCase() === 'tr' ? 'tr' : 'ru';
         const uidParam = urlParams.get('uid') || '';
+        const cidParam = urlParams.get('cid') || '';
+        const pmIdParam = urlParams.get('pmid') || '';
 
         const T = {
             ru: {
-                hdr: "Конструктор кнопок поста",
-                tabEdit: "✏️ Редактор",
-                tabPrev: "👁 Предпросмотр",
-                dragHint: "Удерживайте ≡ для перемещения рядов и кнопок",
+                hdr: "Конструктор закрепки",
+                tabEdit: "🔘 Кнопки",
+                tabText: "📝 Текст поста",
+                tabPrev: "👁 Превью",
+                dragHint: "Удерживайте ≡ для перемещения • Кнопка 🆕 включает зелёный NEW",
                 autoSort: "Сортировать А–Я после INSTAGRAM",
                 addRow: "Добавить новый ряд",
-                prevHint: "Так кнопки будут выглядеть под постом в канале:",
-                saveBtn: "СОХРАНИТЬ И ЗАКРЫТЬ",
+                textHint: "Текст поста (при редактировании текста все ваши кнопки сохраняются):",
+                prevHint: "Так пост и кнопки будут выглядеть в канале @pivoklaleli:",
+                saveBtn: "СОХРАНИТЬ ИЗМЕНЕНИЯ",
                 saving: "Сохранение...",
                 rowTitle: (i) => `Ряд ${i}`,
                 delRow: "Удалить ряд",
                 confirmDelRow: "Удалить весь ряд?",
                 addBtnInRow: "Добавить кнопку в ряд",
-                phText: "Название кнопки",
+                phText: "Название кнопки (напр. MY CLARISSA)",
                 phUrl: "https://t.me/... или https://wa.me/...",
                 stDefault: "Тёмный",
                 stPrimary: "Синий",
@@ -132,20 +137,22 @@
                 errNet: "Сетевая ошибка при сохранении"
             },
             tr: {
-                hdr: "Post Buton Tasarımcısı",
-                tabEdit: "✏️ Editör",
+                hdr: "Sabit Post Tasarımcısı",
+                tabEdit: "🔘 Butonlar",
+                tabText: "📝 Post Metni",
                 tabPrev: "👁 Önizleme",
-                dragHint: "Taşımak için ≡ simgesine basılı tutun",
+                dragHint: "Taşımak için ≡ basılı tutun • 🆕 tuşu yeşil NEW modunu açar",
                 autoSort: "INSTAGRAM sonrası A–Z sırala",
                 addRow: "Yeni Satır Ekle",
-                prevHint: "Butonlar kanalda postun altında böyle görünecek:",
-                saveBtn: "KAYDET VE KAPAT",
+                textHint: "Post metni (metni değiştirdiğinizde tüm butonlarınız korunur):",
+                prevHint: "@pivoklaleli kanalında post böyle görünecek:",
+                saveBtn: "DEĞİŞİKLİKLERİ KAYDET",
                 saving: "Kaydediliyor...",
                 rowTitle: (i) => `Satır ${i}`,
                 delRow: "Satırı Sil",
                 confirmDelRow: "Tüm satır silinsin mi?",
                 addBtnInRow: "Satıra Buton Ekle",
-                phText: "Buton adı",
+                phText: "Buton adı (örn. MY CLARISSA)",
                 phUrl: "https://t.me/... veya https://wa.me/...",
                 stDefault: "Koyu",
                 stPrimary: "Mavi",
@@ -160,21 +167,30 @@
 
         document.getElementById('hdr-title').innerText = T.hdr;
         document.getElementById('tab-editor').innerText = T.tabEdit;
+        document.getElementById('tab-text').innerText = T.tabText;
         document.getElementById('tab-preview').innerText = T.tabPrev;
         document.getElementById('lbl-drag-hint').innerText = T.dragHint;
         document.getElementById('lbl-autosort').innerText = T.autoSort;
         document.getElementById('lbl-add-row').innerText = T.addRow;
+        document.getElementById('lbl-text-hint').innerText = T.textHint;
         document.getElementById('lbl-preview-hint').innerText = T.prevHint;
         document.getElementById('lbl-save').innerText = T.saveBtn;
 
         let rows = [];
+        let hasMediaPost = false;
+        let currentTab = 'editor';
         let sortableRowsInstance = null;
         let sortableButtonsInstances = [];
 
         fetch('/api/get_draft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData: tg.initData, uid: uidParam })
+            body: JSON.stringify({
+                initData: tg.initData,
+                uid: uidParam,
+                cid: cidParam,
+                pmid: pmIdParam
+            })
         })
         .then(r => r.json())
         .then(data => {
@@ -182,6 +198,13 @@
                 rows = data.rows;
             } else {
                 rows = [[{ text: '', url: '', style: '' }]];
+            }
+            if (typeof data.text === 'string') {
+                document.getElementById('post-text-area').value = data.text;
+            }
+            hasMediaPost = !!data.is_media;
+            if (hasMediaPost) {
+                document.getElementById('tab-text').classList.add('hidden');
             }
             if (typeof data.auto_sort === 'boolean') {
                 document.getElementById('chk-autosort').checked = data.auto_sort;
@@ -206,24 +229,30 @@
         }
 
         function switchTab(tab) {
-            saveInputsToData();
-            const btnEditor = document.getElementById('tab-editor');
-            const btnPreview = document.getElementById('tab-preview');
-            const viewEditor = document.getElementById('view-editor');
-            const viewPreview = document.getElementById('view-preview');
+            if (currentTab === 'editor') saveInputsToData();
+            currentTab = tab;
+
+            const tabs = {
+                editor: [document.getElementById('tab-editor'), document.getElementById('view-editor')],
+                text: [document.getElementById('tab-text'), document.getElementById('view-text')],
+                preview: [document.getElementById('tab-preview'), document.getElementById('view-preview')]
+            };
+
+            Object.keys(tabs).forEach(k => {
+                const [btn, view] = tabs[k];
+                if (k === tab) {
+                    btn.className = "flex-1 py-3 text-center tab-active transition text-xs sm:text-sm" + (k === 'text' && hasMediaPost ? " hidden" : "");
+                    view.classList.remove('hidden');
+                } else {
+                    btn.className = "flex-1 py-3 text-center tab-inactive transition text-xs sm:text-sm" + (k === 'text' && hasMediaPost ? " hidden" : "");
+                    view.classList.add('hidden');
+                }
+            });
 
             if (tab === 'editor') {
-                btnEditor.className = "flex-1 py-3 text-center tab-active transition text-sm";
-                btnPreview.className = "flex-1 py-3 text-center tab-inactive transition text-sm";
-                viewEditor.classList.remove('hidden');
-                viewPreview.classList.add('hidden');
                 renderEditor();
-            } else {
+            } else if (tab === 'preview') {
                 if (document.getElementById('chk-autosort').checked) sortFirms();
-                btnPreview.className = "flex-1 py-3 text-center tab-active transition text-sm";
-                btnEditor.className = "flex-1 py-3 text-center tab-inactive transition text-sm";
-                viewPreview.classList.remove('hidden');
-                viewEditor.classList.add('hidden');
                 renderPreview();
             }
         }
@@ -231,6 +260,8 @@
         function saveInputsToData() {
             const container = document.getElementById('rows-container');
             const rowEls = container.querySelectorAll('.row-block');
+            if (rowEls.length === 0 && rows.length > 0) return;
+
             let newRows = [];
             rowEls.forEach((rowEl) => {
                 let r = [];
@@ -243,6 +274,21 @@
                 newRows.push(r);
             });
             rows = newRows;
+        }
+
+        function toggleNewBadge(rIndex, bIndex) {
+            saveInputsToData();
+            const btn = rows[rIndex][bIndex];
+            if (!btn) return;
+            const hasNew = btn.text.includes('🆕');
+            if (hasNew) {
+                btn.text = btn.text.replace(/🆕\s*/g, '').trim();
+                if (btn.style === 'success') btn.style = null;
+            } else {
+                btn.text = '🆕 ' + btn.text.trim();
+                btn.style = 'success';
+            }
+            renderEditor();
         }
 
         function renderEditor() {
@@ -274,14 +320,18 @@
                 btnsContainer.className = 'btns-container p-2 space-y-2';
 
                 row.forEach((btn, bIndex) => {
+                    const isNewActive = (btn.text || '').includes('🆕');
                     const btnEl = document.createElement('div');
-                    btnEl.className = 'btn-block flex gap-2.5 bg-gray-700/40 p-2.5 rounded-lg border border-gray-600 relative';
+                    btnEl.className = 'btn-block flex gap-2 bg-gray-700/40 p-2.5 rounded-lg border border-gray-600 relative';
                     btnEl.innerHTML = `
                         <div class="btn-handle flex items-center justify-center text-gray-400 cursor-grab hover:text-white shrink-0">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                         </div>
                         <div class="flex-1 space-y-2 min-w-0">
-                            <input type="text" class="input-text w-full text-sm rounded px-2.5 py-1.5 placeholder-gray-500" placeholder="${escapeHtml(T.phText)}" value="${escapeHtml(btn.text)}">
+                            <div class="flex gap-1.5">
+                                <input type="text" class="input-text w-full text-sm rounded px-2.5 py-1.5 placeholder-gray-500" placeholder="${escapeHtml(T.phText)}" value="${escapeHtml(btn.text)}">
+                                <button type="button" onclick="toggleNewBadge(${rIndex}, ${bIndex})" title="NEW" class="px-2 py-1 rounded text-xs font-bold shrink-0 border ${isNewActive ? 'bg-green-700 border-green-400 text-white' : 'bg-gray-800 border-gray-600 text-gray-400'}">🆕</button>
+                            </div>
                             <div class="flex gap-2">
                                 <input type="text" class="input-url w-full text-sm rounded px-2.5 py-1.5 placeholder-gray-500" placeholder="${escapeHtml(T.phUrl)}" value="${escapeHtml(btn.url)}">
                                 <select class="select-style w-28 text-xs rounded px-1.5 py-1.5 shrink-0">
@@ -337,6 +387,7 @@
         }
 
         function renderPreview() {
+            document.getElementById('preview-text-box').innerText = document.getElementById('post-text-area').value || '';
             const container = document.getElementById('preview-container');
             container.innerHTML = '';
             const validRows = rows.map(r => r.filter(b => b.text.trim() !== '')).filter(r => r.length > 0);
@@ -428,7 +479,7 @@
         }
 
         function saveAndClose() {
-            saveInputsToData();
+            if (currentTab === 'editor') saveInputsToData();
             const autoSort = document.getElementById('chk-autosort').checked;
             if (autoSort) sortFirms();
 
@@ -449,13 +500,18 @@
             document.getElementById('save-btn').disabled = true;
             document.getElementById('lbl-save').innerText = T.saving;
 
+            const postText = hasMediaPost ? null : document.getElementById('post-text-area').value;
+
             fetch('/api/save_draft', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     initData: tg.initData,
                     uid: uidParam,
+                    cid: cidParam,
+                    pmid: pmIdParam,
                     rows: cleanRows,
+                    text: postText,
                     auto_sort: autoSort
                 })
             })
