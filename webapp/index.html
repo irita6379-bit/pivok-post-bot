@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PIVOK — Post Editor</title>
+    <title>PIVOK Post Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -16,14 +16,26 @@
             padding: 0;
             overscroll-behavior-y: none;
         }
-        .btn-pivok { background-color: #5d0537; color: #f5d8b8; border: 1px solid #8a1d5a; }
+        .btn-pivok {
+            background-color: #5d0537;
+            color: #f5d8b8;
+            border: 1px solid #8a1d5a;
+        }
         .text-hint { color: var(--tg-theme-hint-color, #9ca3af); }
-        .tab-active { border-bottom: 2px solid #d6a474; color: #d6a474; font-weight: 700; }
+
+        .tab-active {
+            border-bottom: 2px solid #d6a474;
+            color: #d6a474;
+            font-weight: bold;
+        }
         .tab-inactive { color: var(--tg-theme-hint-color, #9ca3af); }
 
+        /* Drag & Drop styles */
         .sortable-ghost { opacity: 0.4; background-color: rgba(214, 164, 116, 0.2); }
         .sortable-drag { cursor: grabbing !important; }
+        .handle { cursor: grab; }
 
+        /* Telegram Button Colors (Bot API 9.4+) */
         .tg-bg-default { background-color: #2b3a4a; color: #ffffff; }
         .tg-bg-primary { background-color: #2d7696; color: #ffffff; }
         .tg-bg-success { background-color: #3f7d3b; color: #ffffff; }
@@ -34,125 +46,96 @@
             color: var(--tg-theme-text-color, #ffffff);
             border: 1px solid #4b3f57;
         }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #d6a474;
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
 
-    <!-- Header -->
-    <div class="px-4 py-2.5 flex items-center justify-between text-sm tracking-wide shrink-0" style="background:#5d0537; color:#d6a474;">
-        <button onclick="closeWithoutSaving()" class="text-xs px-2.5 py-1 rounded bg-black/25 text-[#f5d8b8] font-semibold">
-            ← Back
-        </button>
-        <div class="font-bold">PIVOK Post Editor</div>
-        <div id="channel-badge" class="text-[11px] opacity-85 truncate max-w-[110px]">@pivoklaleli</div>
-    </div>
-
     <!-- Tabs -->
     <div class="flex border-b border-gray-700 bg-[var(--tg-theme-bg-color)] z-10 shrink-0">
-        <button id="tab-buttons" onclick="switchTab('buttons')" class="flex-1 py-3 text-center tab-active transition text-xs sm:text-sm">
-            Buttons
+        <button id="tab-editor" onclick="switchTab('editor')" class="flex-1 py-3 text-center tab-active transition text-sm">
+            Editor
         </button>
-        <button id="tab-text" onclick="switchTab('text')" class="flex-1 py-3 text-center tab-inactive transition text-xs sm:text-sm">
+        <button id="tab-text" onclick="switchTab('text')" class="flex-1 py-3 text-center tab-inactive transition text-sm">
             Post Text
         </button>
-        <button id="tab-preview" onclick="switchTab('preview')" class="flex-1 py-3 text-center tab-inactive transition text-xs sm:text-sm">
+        <button id="tab-preview" onclick="switchTab('preview')" class="flex-1 py-3 text-center tab-inactive transition text-sm">
             Preview
         </button>
     </div>
 
-    <!-- Main Scroll Area -->
-    <div class="flex-1 overflow-y-auto p-4 pb-28 space-y-4" id="main-scroll">
+    <!-- Main Scroll Container -->
+    <div class="flex-1 overflow-y-auto p-4 pb-24" id="main-scroll">
 
-        <!-- BUTTONS TAB -->
-        <div id="view-buttons" class="block space-y-4">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-sm font-bold text-gray-100">PIVOK Post Buttons</h2>
-                    <p class="text-xs text-hint">Check the buttons you want attached to this post.</p>
-                </div>
-                <div class="flex gap-1.5">
-                    <button type="button" onclick="selectAllConfigured(true)" class="text-[11px] px-2.5 py-1 rounded bg-gray-800 border border-gray-600 text-gray-200">Select Active</button>
-                    <button type="button" onclick="selectAllConfigured(false)" class="text-[11px] px-2.5 py-1 rounded bg-gray-800 border border-gray-600 text-gray-300">Clear</button>
-                </div>
+        <!-- TAB: ROW & BUTTON EDITOR (solastore2026 mechanism in PIVOK colors) -->
+        <div id="view-editor" class="block space-y-4">
+            <div class="flex justify-between items-center mb-2">
+                <p class="text-sm text-hint">Hold <span class="text-lg">≡</span> to drag and reorder.</p>
             </div>
 
-            <div id="presets-container" class="space-y-2.5"></div>
+            <div id="rows-container" class="space-y-6"></div>
 
-            <!-- Collapsible Custom Rows (Preserved for extra/brand buttons & /pinned post) -->
-            <div class="pt-2 border-t border-gray-700/80">
-                <button type="button" onclick="toggleCustomSection()" class="w-full flex items-center justify-between py-2 text-xs font-semibold text-gray-300 hover:text-white">
-                    <span id="custom-toggle-label">➕ Custom / Additional Buttons (Optional)</span>
-                    <span id="custom-toggle-arrow">▾</span>
-                </button>
-
-                <div id="custom-section" class="hidden space-y-3 mt-2">
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs text-hint">Hold ≡ to reorder custom rows</span>
-                        <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer select-none">
-                            <input type="checkbox" id="chk-autosort" class="rounded">
-                            <span>Sort A–Z</span>
-                        </label>
-                    </div>
-                    <div id="rows-container" class="space-y-3"></div>
-                    <button type="button" onclick="addNewRow()" class="w-full py-2.5 border border-dashed border-gray-500 rounded-lg text-gray-300 hover:text-white text-xs">
-                        + Add Custom Button Row
-                    </button>
-                </div>
-            </div>
+            <button type="button" onclick="addNewRow()" class="w-full py-3 border-2 border-dashed border-gray-500 rounded-lg text-gray-400 hover:text-white hover:border-[#d6a474] transition flex items-center justify-center gap-2 mt-6">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Add new row
+            </button>
         </div>
 
-        <!-- POST TEXT TAB -->
+        <!-- TAB: POST TEXT -->
         <div id="view-text" class="hidden space-y-2.5">
             <div class="flex items-center justify-between">
-                <p class="text-xs text-hint" id="text-mode-label">Edit your post text below:</p>
+                <p class="text-sm text-hint" id="text-mode-label">Edit post text:</p>
                 <span id="char-counter" class="text-xs font-mono text-gray-400">0 / 4096</span>
             </div>
-            <textarea id="post-text-area" rows="14" oninput="updateCharCounter()" placeholder="Write or edit your post text / photo caption..." class="w-full text-sm rounded-xl p-3 leading-relaxed focus:outline-none focus:border-pink-500"></textarea>
+            <textarea id="post-text-area" rows="14" oninput="updateCharCounter()" placeholder="Enter post text or photo caption..." class="w-full text-sm rounded-xl p-3 leading-relaxed"></textarea>
         </div>
 
-        <!-- PREVIEW TAB -->
-        <div id="view-preview" class="hidden space-y-3">
-            <p class="text-xs text-hint text-center">Live preview of how your post will appear in the channel:</p>
-            <div class="bg-gray-800/70 p-3.5 rounded-xl border border-gray-700 max-w-md mx-auto shadow-lg">
+        <!-- TAB: PREVIEW -->
+        <div id="view-preview" class="hidden">
+            <p class="text-sm text-hint mb-4 text-center">How your post and buttons will look in Telegram:</p>
+            <div class="bg-gray-800/50 p-4 rounded-xl border border-gray-700 max-w-sm mx-auto shadow-lg">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-bold" style="color:#e879a0;">PIVOK</span>
-                    <span id="preview-media-badge" class="hidden text-[11px] px-2 py-0.5 rounded bg-purple-900/60 border border-purple-700 text-purple-200">📷 Media Attached</span>
+                    <span class="text-xs font-bold" style="color:#d6a474;">PIVOK</span>
+                    <span id="preview-media-badge" class="hidden text-[11px] px-2 py-0.5 rounded bg-[#5d0537] text-[#f5d8b8]">📷 Photo / Media</span>
                 </div>
-                <div id="preview-media-box" class="hidden mb-2.5 rounded-lg bg-gray-900/70 border border-gray-700 py-6 text-center text-xs text-gray-400">
-                    📷 Attached Photo / Media Preserved
+                <div id="preview-text-box" class="text-xs text-gray-200 whitespace-pre-wrap mb-3 leading-relaxed max-h-56 overflow-y-auto"></div>
+                <div id="preview-placeholder" class="flex gap-3 mb-4 opacity-50 hidden">
+                    <div class="w-10 h-10 rounded-full shrink-0" style="background:#5d0537;"></div>
+                    <div class="flex-1">
+                        <div class="h-3 w-24 bg-gray-500 rounded mb-2"></div>
+                        <div class="h-3 w-full bg-gray-600 rounded mb-1"></div>
+                        <div class="h-3 w-2/3 bg-gray-600 rounded"></div>
+                    </div>
                 </div>
-                <div id="preview-text-box" class="text-xs text-gray-100 whitespace-pre-wrap mb-3 leading-relaxed max-h-60 overflow-y-auto"></div>
                 <div id="preview-container" class="space-y-1.5"></div>
             </div>
         </div>
 
     </div>
 
-    <!-- Fixed Footer -->
-    <div class="fixed bottom-0 left-0 w-full p-3.5 bg-gradient-to-t from-[var(--tg-theme-bg-color)] via-[var(--tg-theme-bg-color)] to-transparent shrink-0 flex gap-2.5">
-        <button type="button" onclick="closeWithoutSaving()" class="px-4 py-3.5 rounded-xl font-semibold text-sm bg-gray-800 border border-gray-600 text-gray-200 shrink-0">
-            Back
-        </button>
-        <button id="save-btn" type="button" onclick="saveAndClose()" class="flex-1 btn-pivok py-3.5 rounded-xl font-bold shadow-lg text-sm sm:text-base flex justify-center items-center">
-            <span id="lbl-save">Save & Back to Post</span>
+    <!-- Fixed Bottom Bar -->
+    <div class="fixed bottom-0 left-0 w-full p-4 bg-gradient-to-t from-[var(--tg-theme-bg-color)] via-[var(--tg-theme-bg-color)] to-transparent shrink-0">
+        <button id="save-btn" type="button" onclick="saveAndClose()" class="w-full btn-pivok py-3.5 rounded-xl font-bold shadow-lg text-lg flex justify-center items-center gap-2">
+            SAVE AND CLOSE
         </button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
+        try { tg.enableClosingConfirmation(); } catch (e) {}
 
         const urlParams = new URLSearchParams(window.location.search);
         const uidParam = urlParams.get('uid') || '';
         const cidParam = urlParams.get('cid') || '';
         const pmIdParam = urlParams.get('pmid') || '';
 
-        let presets = [];
-        let openUrlEditorKeys = {};
-        let customRows = [];
+        let rows = [];
         let mediaType = null;
-        let currentTab = 'buttons';
-        let customSectionOpen = false;
+        let currentTab = 'editor';
         let sortableRowsInstance = null;
         let sortableButtonsInstances = [];
 
@@ -169,10 +152,6 @@
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
-        }
-
-        function closeWithoutSaving() {
-            tg.close();
         }
 
         function getMaxChars() {
@@ -201,155 +180,73 @@
         })
         .then(r => r.json())
         .then(data => {
-            if (data.channel) {
-                document.getElementById('channel-badge').innerText = data.channel;
+            if (Array.isArray(data.rows) && data.rows.length > 0) {
+                rows = data.rows;
+            } else {
+                rows = [[{ text: '', url: '', style: '' }]];
             }
             mediaType = data.media_type || null;
             if (mediaType) {
                 document.getElementById('text-mode-label').innerText = `Edit ${mediaType} caption (optional):`;
                 document.getElementById('preview-media-badge').classList.remove('hidden');
-                document.getElementById('preview-media-box').classList.remove('hidden');
             }
             if (typeof data.text === 'string') {
                 document.getElementById('post-text-area').value = data.text;
             }
             updateCharCounter();
-
-            presets = Array.isArray(data.presets) ? data.presets : [];
-            customRows = Array.isArray(data.custom_rows) ? data.custom_rows : [];
-            if (typeof data.auto_sort === 'boolean') {
-                document.getElementById('chk-autosort').checked = data.auto_sort;
-            }
-            if (data.mode === 'pinned' || customRows.length > 0) {
-                customSectionOpen = true;
-                document.getElementById('custom-section').classList.remove('hidden');
-            }
-            renderPresets();
-            renderCustomEditor();
+            renderEditor();
         })
         .catch(() => {
-            presets = [];
-            renderPresets();
+            rows = [[{ text: '', url: '', style: '' }]];
+            renderEditor();
         });
 
-        function syncPresetInputs() {
-            presets.forEach((p, idx) => {
-                const urlInput = document.getElementById(`preset-url-${idx}`);
-                if (urlInput) {
-                    p.url = normalizeUrl(urlInput.value);
-                }
-            });
-        }
-
-        function togglePresetSelected(idx) {
-            syncPresetInputs();
-            presets[idx].selected = !presets[idx].selected;
-            if (presets[idx].selected && !presets[idx].url) {
-                openUrlEditorKeys[presets[idx].key] = true;
+        function switchTab(tab) {
+            if (currentTab === 'editor') {
+                saveInputsToData();
             }
-            renderPresets();
-        }
+            currentTab = tab;
 
-        function togglePresetUrlEdit(idx) {
-            syncPresetInputs();
-            const k = presets[idx].key;
-            openUrlEditorKeys[k] = !openUrlEditorKeys[k];
-            renderPresets();
-        }
+            const tabs = {
+                editor: ['tab-editor', 'view-editor'],
+                text: ['tab-text', 'view-text'],
+                preview: ['tab-preview', 'view-preview']
+            };
 
-        function selectAllConfigured(enable) {
-            syncPresetInputs();
-            presets.forEach(p => {
-                p.selected = enable ? Boolean(p.url) : false;
+            Object.keys(tabs).forEach(k => {
+                const [btnId, viewId] = tabs[k];
+                document.getElementById(btnId).className = `flex-1 py-3 text-center transition text-sm ${k === tab ? 'tab-active' : 'tab-inactive'}`;
+                document.getElementById(viewId).classList.toggle('hidden', k !== tab);
             });
-            renderPresets();
+
+            if (tab === 'editor') {
+                renderEditor();
+            } else if (tab === 'preview') {
+                sortFirms();
+                renderPreview();
+            }
         }
 
-        function renderPresets() {
-            const container = document.getElementById('presets-container');
-            container.innerHTML = '';
-
-            presets.forEach((p, idx) => {
-                const hasUrl = Boolean((p.url || '').trim());
-                const showUrlInput = Boolean(openUrlEditorKeys[p.key]);
-                const card = document.createElement('div');
-                card.className = `rounded-xl border p-3 transition ${
-                    p.selected
-                        ? 'bg-gray-800/90 border-[#d6a474]/70 shadow-sm'
-                        : 'bg-gray-800/40 border-gray-700 opacity-85'
-                }`;
-
-                const badgeHtml = hasUrl
-                    ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-green-900/60 border border-green-700 text-green-300">Ready</span>`
-                    : `<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-900/50 border border-amber-700 text-amber-300">Link not set</span>`;
-
-                card.innerHTML = `
-                    <div class="flex items-center justify-between gap-2">
-                        <label class="flex items-center gap-3 cursor-pointer select-none flex-1 min-w-0">
-                            <input type="checkbox" ${p.selected ? 'checked' : ''} onchange="togglePresetSelected(${idx})" class="w-4 h-4 rounded accent-[#d6a474] shrink-0">
-                            <span class="font-semibold text-sm truncate">${escapeHtml(p.text)}</span>
-                            ${badgeHtml}
-                        </label>
-                        <button type="button" onclick="togglePresetUrlEdit(${idx})" class="text-xs px-2.5 py-1 rounded bg-gray-700/60 hover:bg-gray-700 text-gray-200 border border-gray-600 shrink-0">
-                            ${showUrlInput ? 'Done' : 'Edit Link'}
-                        </button>
-                    </div>
-                    ${
-                        showUrlInput
-                            ? `<div class="mt-2.5">
-                                   <input id="preset-url-${idx}" type="url" placeholder="Paste https://... link for ${escapeHtml(p.text)}" value="${escapeHtml(p.url || '')}" oninput="presets[${idx}].url = this.value.trim()" class="w-full text-xs rounded-lg px-3 py-2 placeholder-gray-500">
-                               </div>`
-                            : (hasUrl ? `<div class="mt-1 pl-7 text-[11px] text-gray-400 truncate">${escapeHtml(p.url)}</div>` : '')
-                    }
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function toggleCustomSection() {
-            saveCustomInputsToData();
-            customSectionOpen = !customSectionOpen;
-            document.getElementById('custom-section').classList.toggle('hidden', !customSectionOpen);
-            document.getElementById('custom-toggle-arrow').innerText = customSectionOpen ? '▴' : '▾';
-            if (customSectionOpen) renderCustomEditor();
-        }
-
-        function saveCustomInputsToData() {
+        function saveInputsToData() {
             const container = document.getElementById('rows-container');
-            if (!container) return;
             const rowEls = container.querySelectorAll('.row-block');
-            if (rowEls.length === 0 && customRows.length === 0) return;
-            if (rowEls.length === 0 && !customSectionOpen) return;
+            if (rowEls.length === 0 && rows.length > 0 && currentTab !== 'editor') return;
 
-            let updated = [];
+            let newRows = [];
             rowEls.forEach(rowEl => {
                 let r = [];
                 rowEl.querySelectorAll('.btn-block').forEach(btnEl => {
                     const text = btnEl.querySelector('.input-text').value;
-                    const url = normalizeUrl(btnEl.querySelector('.input-url').value);
+                    const url = btnEl.querySelector('.input-url').value;
                     const style = btnEl.querySelector('.select-style').value;
                     r.push({ text, url, style: style || null });
                 });
-                updated.push(r);
+                newRows.push(r);
             });
-            customRows = updated;
+            rows = newRows;
         }
 
-        function toggleNewBadge(rIndex, bIndex) {
-            saveCustomInputsToData();
-            const btn = customRows[rIndex][bIndex];
-            if (!btn) return;
-            if ((btn.text || '').includes('🆕')) {
-                btn.text = btn.text.replace(/🆕\s*/g, '').trim();
-                if (btn.style === 'success') btn.style = null;
-            } else {
-                btn.text = '🆕 ' + (btn.text || '').trim();
-                btn.style = 'success';
-            }
-            renderCustomEditor();
-        }
-
-        function renderCustomEditor() {
+        function renderEditor() {
             const container = document.getElementById('rows-container');
             container.innerHTML = '';
 
@@ -357,66 +254,80 @@
             sortableButtonsInstances = [];
             if (sortableRowsInstance) sortableRowsInstance.destroy();
 
-            customRows.forEach((row, rIndex) => {
+            rows.forEach((row, rIndex) => {
                 const rowEl = document.createElement('div');
-                rowEl.className = 'row-block bg-gray-800/70 border border-gray-700 rounded-xl overflow-hidden';
+                rowEl.className = 'row-block bg-gray-800/70 border border-gray-700 rounded-xl overflow-hidden shadow-sm';
+                rowEl.dataset.rindex = rIndex;
 
                 const header = document.createElement('div');
-                header.className = 'bg-gray-900/60 p-2 flex justify-between items-center border-b border-gray-700';
+                header.className = 'bg-gray-900/50 p-2 flex justify-between items-center border-b border-gray-700';
                 header.innerHTML = `
                     <div class="flex items-center gap-2">
-                        <div class="row-handle text-gray-400 hover:text-white px-2 py-0.5 cursor-grab">≡</div>
-                        <span class="text-xs font-semibold text-gray-300">Custom Row ${rIndex + 1}</span>
+                        <div class="row-handle text-gray-500 hover:text-white px-2 py-1 cursor-grab">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg>
+                        </div>
+                        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">ROW ${rIndex + 1}</span>
                     </div>
-                    <button type="button" onclick="deleteRow(${rIndex})" class="text-red-400 text-xs px-2">Delete Row</button>
+                    <button type="button" onclick="deleteRow(${rIndex})" class="text-red-400 hover:text-red-300 px-2 py-1 text-sm font-medium">Delete row</button>
                 `;
                 rowEl.appendChild(header);
 
                 const btnsContainer = document.createElement('div');
                 btnsContainer.className = 'btns-container p-2 space-y-2';
+                btnsContainer.dataset.rindex = rIndex;
 
                 row.forEach((btn, bIndex) => {
-                    const isNewActive = (btn.text || '').includes('🆕');
                     const btnEl = document.createElement('div');
-                    btnEl.className = 'btn-block flex gap-2 bg-gray-700/40 p-2 rounded-lg border border-gray-600';
+                    btnEl.className = 'btn-block flex gap-3 bg-gray-700/50 p-3 rounded-lg border border-gray-600 relative';
+
                     btnEl.innerHTML = `
-                        <div class="btn-handle flex items-center text-gray-400 cursor-grab px-1">≡</div>
-                        <div class="flex-1 space-y-1.5 min-w-0">
-                            <div class="flex gap-1.5">
-                                <input type="text" class="input-text w-full text-xs rounded px-2.5 py-1.5" placeholder="Button Title" value="${escapeHtml(btn.text)}">
-                                <button type="button" onclick="toggleNewBadge(${rIndex}, ${bIndex})" class="px-2 py-1 rounded text-xs font-bold shrink-0 border ${isNewActive ? 'bg-green-700 border-green-400 text-white' : 'bg-gray-800 border-gray-600 text-gray-400'}">🆕</button>
-                            </div>
-                            <div class="flex gap-1.5">
-                                <input type="text" class="input-url w-full text-xs rounded px-2.5 py-1.5" placeholder="https://..." value="${escapeHtml(btn.url)}">
-                                <select class="select-style w-24 text-xs rounded px-1 py-1.5 shrink-0">
-                                    <option value="" ${!btn.style ? 'selected' : ''}>Default</option>
+                        <div class="btn-handle flex items-center justify-center text-gray-500 cursor-grab hover:text-white shrink-0">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        </div>
+
+                        <div class="flex-1 space-y-2 min-w-0">
+                            <input type="text" class="input-text w-full text-sm rounded px-2 py-1.5 transition placeholder-gray-500" placeholder="Button title" value="${escapeHtml(btn.text)}">
+                            <div class="flex gap-2">
+                                <input type="url" class="input-url w-full text-sm rounded px-2 py-1.5 transition placeholder-gray-500" placeholder="https://" value="${escapeHtml(btn.url)}">
+                                <select class="select-style w-28 text-sm rounded px-1 py-1.5 transition shrink-0">
+                                    <option value="" ${!btn.style ? 'selected' : ''}>Dark</option>
                                     <option value="primary" ${btn.style === 'primary' ? 'selected' : ''}>Blue</option>
                                     <option value="success" ${btn.style === 'success' ? 'selected' : ''}>Green</option>
                                     <option value="danger" ${btn.style === 'danger' ? 'selected' : ''}>Red</option>
                                 </select>
                             </div>
                         </div>
-                        <button type="button" onclick="deleteButton(${rIndex}, ${bIndex})" class="text-gray-400 hover:text-red-400 px-1 text-sm self-start">✕</button>
+
+                        <button type="button" onclick="deleteButton(${rIndex}, ${bIndex})" class="shrink-0 text-gray-400 hover:text-red-400 p-1 flex items-start self-start">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
                     `;
                     btnsContainer.appendChild(btnEl);
                 });
 
                 rowEl.appendChild(btnsContainer);
 
-                const addWrap = document.createElement('div');
-                addWrap.className = 'p-2 pt-0';
-                addWrap.innerHTML = `<button type="button" onclick="addNewButton(${rIndex})" class="w-full py-1.5 bg-gray-700/40 rounded border border-gray-600 text-xs text-gray-200">+ Add Button in Row</button>`;
-                rowEl.appendChild(addWrap);
-
+                const addBtnContainer = document.createElement('div');
+                addBtnContainer.className = 'p-2 pt-0';
+                addBtnContainer.innerHTML = `
+                    <button type="button" onclick="addNewButton(${rIndex})" class="w-full py-2 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 rounded border border-gray-600 transition text-sm flex items-center justify-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        Add button to row
+                    </button>
+                `;
+                rowEl.appendChild(addBtnContainer);
                 container.appendChild(rowEl);
 
                 sortableButtonsInstances.push(
                     new Sortable(btnsContainer, {
-                        group: 'custom-buttons',
+                        group: 'buttons',
                         handle: '.btn-handle',
                         animation: 150,
                         ghostClass: 'sortable-ghost',
-                        onEnd: () => { saveCustomInputsToData(); renderCustomEditor(); }
+                        onEnd: function () {
+                            saveInputsToData();
+                            renderEditor();
+                        }
                     })
                 );
             });
@@ -425,144 +336,160 @@
                 handle: '.row-handle',
                 animation: 150,
                 ghostClass: 'sortable-ghost',
-                onEnd: () => { saveCustomInputsToData(); renderCustomEditor(); }
+                onEnd: function () {
+                    saveInputsToData();
+                    renderEditor();
+                }
             });
-        }
-
-        function addNewRow() {
-            saveCustomInputsToData();
-            customRows.push([{ text: '', url: '', style: null }]);
-            renderCustomEditor();
-        }
-
-        function addNewButton(rIndex) {
-            saveCustomInputsToData();
-            customRows[rIndex].push({ text: '', url: '', style: null });
-            renderCustomEditor();
-        }
-
-        function deleteRow(rIndex) {
-            saveCustomInputsToData();
-            customRows.splice(rIndex, 1);
-            renderCustomEditor();
-        }
-
-        function deleteButton(rIndex, bIndex) {
-            saveCustomInputsToData();
-            customRows[rIndex].splice(bIndex, 1);
-            if (customRows[rIndex].length === 0) customRows.splice(rIndex, 1);
-            renderCustomEditor();
-        }
-
-        function sortCustomRows() {
-            let flat = [];
-            customRows.forEach(r => flat.push(...r.filter(b => (b.text || '').trim() !== '')));
-            if (flat.length === 0) return;
-            const clean = t => t.replace(/🆕/g, '').trim().toLowerCase();
-            flat.sort((a, b) => clean(a.text).localeCompare(clean(b.text)));
-            customRows = [];
-            for (let i = 0; i < flat.length; i += 2) {
-                customRows.push(flat.slice(i, i + 2));
-            }
-        }
-
-        function buildCombinedPreviewRows() {
-            syncPresetInputs();
-            saveCustomInputsToData();
-
-            const activePresets = presets.filter(p => p.selected && (p.url || '').trim() !== '');
-            const combined = [];
-            for (let i = 0; i < activePresets.length; i += 2) {
-                combined.push(activePresets.slice(i, i + 2));
-            }
-            customRows.forEach(r => {
-                const valid = r.filter(b => (b.text || '').trim() !== '' && (b.url || '').trim() !== '');
-                if (valid.length > 0) combined.push(valid);
-            });
-            return combined;
         }
 
         function renderPreview() {
             const txt = document.getElementById('post-text-area').value || '';
             const textBox = document.getElementById('preview-text-box');
-            textBox.innerText = txt;
-            textBox.classList.toggle('hidden', !txt.trim());
+            const placeholder = document.getElementById('preview-placeholder');
+            if (txt.trim()) {
+                textBox.innerText = txt;
+                textBox.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            } else {
+                textBox.classList.add('hidden');
+                placeholder.classList.toggle('hidden', Boolean(mediaType));
+            }
 
             const container = document.getElementById('preview-container');
             container.innerHTML = '';
-            const allRows = buildCombinedPreviewRows();
 
-            if (allRows.length === 0) {
-                container.innerHTML = `<p class="text-center text-gray-500 py-2 text-xs italic">No buttons selected for this post</p>`;
+            const validRows = rows
+                .map(r => r.filter(b => (b.text || '').trim() !== ''))
+                .filter(r => r.length > 0);
+
+            if (validRows.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-2 text-sm italic">No buttons added</p>';
                 return;
             }
 
-            allRows.forEach(row => {
+            validRows.forEach(row => {
                 const rowEl = document.createElement('div');
                 rowEl.className = 'flex gap-1.5 w-full';
+
                 row.forEach(btn => {
                     const btnEl = document.createElement('div');
                     let bgClass = 'tg-bg-default';
                     if (btn.style === 'primary') bgClass = 'tg-bg-primary';
                     if (btn.style === 'success') bgClass = 'tg-bg-success';
                     if (btn.style === 'danger') bgClass = 'tg-bg-danger';
-                    btnEl.className = `flex-1 flex justify-center items-center px-2 py-2.5 rounded-lg text-xs font-semibold ${bgClass} truncate relative`;
-                    btnEl.innerHTML = `<span class="truncate block w-full text-center pr-3">${escapeHtml(btn.text)}</span><span class="opacity-70 text-[10px] absolute right-1.5 top-1">↗</span>`;
+
+                    btnEl.className = `flex-1 flex justify-center items-center px-2 py-2 rounded-lg text-sm font-medium ${bgClass} truncate overflow-hidden whitespace-nowrap shadow-sm`;
+                    btnEl.innerHTML = `<span class="truncate block w-full text-center">${escapeHtml(btn.text)} <span class="opacity-50 text-[10px] ml-1">↗</span></span>`;
+
                     rowEl.appendChild(btnEl);
                 });
                 container.appendChild(rowEl);
             });
         }
 
-        function switchTab(tab) {
-            syncPresetInputs();
-            saveCustomInputsToData();
-            currentTab = tab;
+        function addNewRow() {
+            saveInputsToData();
+            rows.push([{ text: '', url: '', style: '' }]);
+            renderEditor();
+            setTimeout(() => {
+                const container = document.getElementById('main-scroll');
+                container.scrollTop = container.scrollHeight;
+            }, 50);
+        }
 
-            const map = {
-                buttons: ['tab-buttons', 'view-buttons'],
-                text: ['tab-text', 'view-text'],
-                preview: ['tab-preview', 'view-preview']
-            };
+        function addNewButton(rowIndex) {
+            saveInputsToData();
+            rows[rowIndex].push({ text: '', url: '', style: '' });
+            renderEditor();
+        }
 
-            Object.keys(map).forEach(k => {
-                const [tId, vId] = map[k];
-                document.getElementById(tId).className = `flex-1 py-3 text-center transition text-xs sm:text-sm ${k === tab ? 'tab-active' : 'tab-inactive'}`;
-                document.getElementById(vId).classList.toggle('hidden', k !== tab);
-            });
-
-            if (tab === 'buttons') {
-                renderPresets();
-                if (customSectionOpen) renderCustomEditor();
-            } else if (tab === 'preview') {
-                if (document.getElementById('chk-autosort').checked) sortCustomRows();
-                renderPreview();
+        function deleteRow(rowIndex) {
+            if (confirm('Delete this entire row?')) {
+                saveInputsToData();
+                rows.splice(rowIndex, 1);
+                renderEditor();
             }
         }
 
-        function saveAndClose() {
-            syncPresetInputs();
-            saveCustomInputsToData();
+        function deleteButton(rowIndex, btnIndex) {
+            saveInputsToData();
+            rows[rowIndex].splice(btnIndex, 1);
+            if (rows[rowIndex].length === 0) {
+                rows.splice(rowIndex, 1);
+            }
+            renderEditor();
+        }
 
-            const autoSort = document.getElementById('chk-autosort').checked;
-            if (autoSort) sortCustomRows();
+        // Keep top PIVOK utility rows intact; sort extra brand rows below them A-Z in pairs
+        function sortFirms() {
+            const coreMarkers = ['WHATSAPP', 'INSTAGRAM', 'SALE CHANNEL', 'VIDEO CHANNEL', 'ADDRESS', 'LOCATION', 'TELEGRAM'];
+            let lastCoreRowIndex = -1;
+            for (let i = 0; i < rows.length; i++) {
+                const isCore = rows[i].some(b => {
+                    const up = (b.text || '').toUpperCase();
+                    return coreMarkers.some(m => up.includes(m));
+                });
+                if (isCore) {
+                    lastCoreRowIndex = i;
+                }
+            }
 
-            // Check selected presets without URL
-            const missingPresets = presets.filter(p => p.selected && !(p.url || '').trim());
-            if (missingPresets.length > 0) {
-                missingPresets.forEach(p => { openUrlEditorKeys[p.key] = true; });
-                switchTab('buttons');
-                tg.showAlert(`Link is not configured yet for: ${missingPresets.map(p => p.text).join(', ')}. Please paste its link or uncheck it.`);
+            if (lastCoreRowIndex === -1 || lastCoreRowIndex >= rows.length - 1) {
                 return;
             }
 
-            // Check custom buttons with missing URL
-            let missingCustomUrl = false;
-            customRows.forEach(r => r.forEach(b => {
-                if ((b.text || '').trim() !== '' && !(b.url || '').trim()) missingCustomUrl = true;
-            }));
-            if (missingCustomUrl) {
-                tg.showAlert('One of your custom buttons has a title without a URL. Please enter its URL or remove it.');
+            const topRows = rows.slice(0, lastCoreRowIndex + 1);
+            const firmRows = rows.slice(lastCoreRowIndex + 1);
+
+            let firmButtons = [];
+            firmRows.forEach(r => {
+                firmButtons.push(...r.filter(b => (b.text || '').trim() !== ''));
+            });
+            if (firmButtons.length === 0) return;
+
+            const cleanForSort = (text) =>
+                text.replace(/🆕/g, '')
+                    .replace(/\bnew\b/ig, '')
+                    .replace(/[^\p{L}\p{N}\s]/gu, '')
+                    .trim()
+                    .toLowerCase();
+
+            firmButtons.sort((a, b) => cleanForSort(a.text).localeCompare(cleanForSort(b.text)));
+
+            const newFirmRows = [];
+            for (let i = 0; i < firmButtons.length; i += 2) {
+                newFirmRows.push(firmButtons.slice(i, i + 2));
+            }
+            rows = [...topRows, ...newFirmRows];
+        }
+
+        function saveAndClose() {
+            if (currentTab === 'editor') {
+                saveInputsToData();
+            }
+            sortFirms();
+
+            let hasInvalidUrl = false;
+            const normalizedRows = rows.map(r =>
+                r.map(b => ({
+                    text: (b.text || '').trim(),
+                    url: normalizeUrl(b.url || ''),
+                    style: b.style || null
+                }))
+            );
+
+            normalizedRows.forEach(r => {
+                r.forEach(b => {
+                    if (b.text !== '' && b.url === '') {
+                        hasInvalidUrl = true;
+                    }
+                });
+            });
+
+            if (hasInvalidUrl) {
+                switchTab('editor');
+                tg.showAlert('One or more buttons have a title without a URL. Please enter a valid https:// link or remove the button.');
                 return;
             }
 
@@ -579,17 +506,12 @@
                 return;
             }
 
-            const presetUrls = {};
-            presets.forEach(p => {
-                presetUrls[p.key] = normalizeUrl(p.url || '');
-            });
-            const selectedKeys = presets.filter(p => p.selected).map(p => p.key);
-            const cleanCustomRows = customRows
-                .map(r => r.filter(b => (b.text || '').trim() !== '' && (b.url || '').trim() !== ''))
+            const cleanRows = normalizedRows
+                .map(r => r.filter(b => b.text !== '' && b.url !== ''))
                 .filter(r => r.length > 0);
 
             document.getElementById('save-btn').disabled = true;
-            document.getElementById('lbl-save').innerText = 'Saving...';
+            document.getElementById('save-btn').innerText = 'SAVING...';
 
             fetch('/api/save_draft', {
                 method: 'POST',
@@ -599,11 +521,8 @@
                     uid: uidParam,
                     cid: cidParam,
                     pmid: pmIdParam,
-                    selected_keys: selectedKeys,
-                    preset_urls: presetUrls,
-                    custom_rows: cleanCustomRows,
-                    text: postText,
-                    auto_sort: autoSort
+                    rows: cleanRows,
+                    text: postText
                 })
             })
             .then(r => r.json())
@@ -611,15 +530,15 @@
                 if (data.success) {
                     tg.close();
                 } else {
-                    tg.showAlert(data.error || 'Failed to save changes.');
+                    tg.showAlert('Error saving changes: ' + (data.error || 'Unknown error'));
                     document.getElementById('save-btn').disabled = false;
-                    document.getElementById('lbl-save').innerText = 'Save & Back to Post';
+                    document.getElementById('save-btn').innerText = 'SAVE AND CLOSE';
                 }
             })
             .catch(() => {
-                tg.showAlert('Network error while saving changes.');
+                tg.showAlert('Network error while saving.');
                 document.getElementById('save-btn').disabled = false;
-                document.getElementById('lbl-save').innerText = 'Save & Back to Post';
+                document.getElementById('save-btn').innerText = 'SAVE AND CLOSE';
             });
         }
     </script>

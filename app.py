@@ -926,13 +926,30 @@ async def handle_incoming_post(message: Message, state: FSMContext):
     if media_type and len(text_content) > 1024:
         text_content = text_content[:1024]
 
-    create_new_post_draft(
+    d = create_new_post_draft(
         uid=uid,
         chat_id=message.chat.id,
         text=text_content,
         media_type=media_type,
         media_file_id=media_fid,
     )
+
+    # If user forwards a post from our own target channel (@pivoklaleli) that already has buttons,
+    # preserve its exact row layout & colors (solastore2026 workflow)
+    fwd_ch_id, _, fwd_msg_id = extract_forward_channel_info(message)
+    saved_ch_id, _ = get_saved_channel(uid)
+    incoming_rows = extract_rows_from_markup(message.reply_markup)
+    if (
+        incoming_rows
+        and fwd_ch_id is not None
+        and str(fwd_ch_id).lower() == str(saved_ch_id).lower()
+    ):
+        d["rows"] = incoming_rows
+        d["mode"] = "pinned"
+        d["origin_channel_id"] = saved_ch_id
+        d["origin_message_id"] = fwd_msg_id
+        persist_store()
+
     await state.set_state(EditorStates.editing_post)
     await render_draft_preview(message.chat.id, uid)
 
@@ -1205,7 +1222,7 @@ async def health():
     return {
         "status": "ok",
         "service": "PIVOK Post Builder Bot",
-        "version": "v3.1-all-6-links",
+        "version": "v3.2-row-editor",
         "channel": DEFAULT_CHANNEL,
         "language": "en",
         "buttons": [p["text"] for p in PIVOK_BUTTON_PRESETS],
@@ -1281,6 +1298,7 @@ async def api_get_draft(request: Request):
         "channel": ch_lbl,
         "media_type": d.get("media_type"),
         "text": d.get("template_text") or "",
+        "rows": d.get("rows", []),
         "presets": get_all_presets_state(selected_keys),
         "custom_rows": custom_rows,
         "auto_sort": d.get("auto_sort", False),
@@ -1300,35 +1318,6 @@ async def api_save_draft(request: Request):
     d = DRAFTS.get(str(uid))
     if not d:
         d = create_new_post_draft(uid=uid, chat_id=cid, text="")
-
-    # Update preset URLs if edited in WebApp
-    preset_urls = data.get("preset_urls")
-    if isinstance(preset_urls, dict):
-        for k, v in preset_urls.items():
-            if k in PRESET_BY_KEY and isinstance(v, str):
-                SAVED_BUTTON_LINKS[k] = normalize_url(v)
-
-    selected_keys = data.get("selected_keys")
-    if not isinstance(selected_keys, list):
-        selected_keys = d.get("selected_keys", default_selected_preset_keys())
-    selected_keys = [k for k in selected_keys if k in PRESET_BY_KEY]
-
-    # Validate that every selected preset button has a configured URL
-    missing_labels = [
-        PRESET_BY_KEY[k]["text"] for k in selected_keys if not get_preset_url(k)
-    ]
-    if missing_labels:
-        return JSONResponse(
-            {
-                "success": False,
-                "error": f"URL is not configured yet for: {', '.join(missing_labels)}. Please enter its URL or uncheck it.",
-            },
-            status_code=400,
-        )
-
-    custom_rows = data.get("custom_rows")
-    if not isinstance(custom_rows, list):
-        custom_rows = d.get("custom_rows", [])
 
     new_text = data.get("text")
     if isinstance(new_text, str):
@@ -1359,12 +1348,69 @@ async def api_save_draft(request: Request):
             )
         d["template_text"] = new_text
 
+    # Primary solastore2026 row-based payload: rows = [[{text, url, style}, ...], ...]
+    incoming_rows = data.get("rows")
+    if isinstance(incoming_rows, list):
+        cleaned_rows: List[List[dict]] = []
+        for r in incoming_rows:
+            if not isinstance(r, list):
+                continue
+            c_row = []
+            for b in r:
+                if not isinstance(b, dict):
+                    continue
+                b_txt = (b.get("text") or "").strip()
+                b_url = normalize_url(b.get("url") or "")
+                b_style = b.get("style") or None
+                if b_txt and not b_url:
+                    return JSONResponse(
+                        {
+                            "success": False,
+                            "error": f"URL is missing for button: {b_txt}",
+                        },
+                        status_code=400,
+                    )
+                if b_txt and b_url:
+                    c_row.append({"text": b_txt, "url": b_url, "style": b_style})
+            if c_row:
+                cleaned_rows.append(c_row)
+        d["rows"] = cleaned_rows
+        sel_keys, custom_rows = split_rows_into_presets_and_custom(cleaned_rows)
+        d["selected_keys"] = sel_keys
+        d["custom_rows"] = custom_rows
+    else:
+        preset_urls = data.get("preset_urls")
+        if isinstance(preset_urls, dict):
+            for k, v in preset_urls.items():
+                if k in PRESET_BY_KEY and isinstance(v, str):
+                    SAVED_BUTTON_LINKS[k] = normalize_url(v)
+
+        selected_keys = data.get("selected_keys")
+        if not isinstance(selected_keys, list):
+            selected_keys = d.get("selected_keys", default_selected_preset_keys())
+        selected_keys = [k for k in selected_keys if k in PRESET_BY_KEY]
+
+        missing_labels = [
+            PRESET_BY_KEY[k]["text"] for k in selected_keys if not get_preset_url(k)
+        ]
+        if missing_labels:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "error": f"URL is not configured yet for: {', '.join(missing_labels)}.",
+                },
+                status_code=400,
+            )
+        custom_rows = data.get("custom_rows")
+        if not isinstance(custom_rows, list):
+            custom_rows = d.get("custom_rows", [])
+        d["selected_keys"] = selected_keys
+        d["custom_rows"] = custom_rows
+        d["rows"] = build_rows_from_selection(selected_keys, custom_rows)
+
     if "auto_sort" in data:
         d["auto_sort"] = bool(data["auto_sort"])
 
-    d["selected_keys"] = selected_keys
-    d["custom_rows"] = custom_rows
-    d["rows"] = build_rows_from_selection(selected_keys, custom_rows)
     d["has_post"] = True
     d["last_published_sig"] = None
 
