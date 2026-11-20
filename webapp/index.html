@@ -454,40 +454,25 @@
             }
         }
 
-        function repackRowsInPairs() {
-            const result = [];
-            let buffer = [];
-            for (let i = 0; i < rows.length; i++) {
-                if (rows[i].length > 2) {
-                    while (buffer.length > 0) {
-                        result.push(buffer.splice(0, 2));
-                    }
-                    result.push(rows[i]);
-                } else {
-                    buffer.push(...rows[i]);
-                }
-            }
-            while (buffer.length > 0) {
-                result.push(buffer.splice(0, 2));
-            }
-            rows = result;
-        }
-
         function deleteButton(rowIndex, btnIndex) {
             saveInputsToData();
             rows[rowIndex].splice(btnIndex, 1);
-            repackRowsInPairs();
+            if (rows[rowIndex].length === 0) {
+                rows.splice(rowIndex, 1);
+            }
             renderEditor();
         }
 
-        // Keep top PIVOK utility rows intact; sort extra brand rows below them A-Z in pairs
+        // Keep all top PIVOK utility rows (including single-button Address row) intact;
+        // only sort brand rows below them A-Z in pairs
         function sortFirms() {
-            const coreMarkers = ['WHATSAPP', 'INSTAGRAM', 'SALE CHANNEL', 'VIDEO CHANNEL', 'ADDRESS', 'LOCATION', 'TELEGRAM'];
+            const coreMarkers = ['WHATSAPP', 'INSTAGRAM', 'SALE', 'VIDEO', 'ADDR', 'LOCAT', 'MAP', 'TELEGRAM', '📍'];
             let lastCoreRowIndex = -1;
             for (let i = 0; i < rows.length; i++) {
                 const isCore = rows[i].some(b => {
                     const up = (b.text || '').toUpperCase();
-                    return coreMarkers.some(m => up.includes(m));
+                    const uUrl = (b.url || '').toLowerCase();
+                    return coreMarkers.some(m => up.includes(m)) || uUrl.includes('maps') || uUrl.includes('wa.me') || uUrl.includes('whatsapp.com') || uUrl.includes('instagram.com');
                 });
                 if (isCore) {
                     lastCoreRowIndex = i;

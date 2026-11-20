@@ -1222,7 +1222,7 @@ async def health():
     return {
         "status": "ok",
         "service": "PIVOK Post Builder Bot",
-        "version": "v3.4-button-icons",
+        "version": "v3.5-single-row-preserved",
         "channel": DEFAULT_CHANNEL,
         "language": "en",
         "buttons": [p["text"] for p in PIVOK_BUTTON_PRESETS],
