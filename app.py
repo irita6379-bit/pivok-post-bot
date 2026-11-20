@@ -6,6 +6,7 @@ PIVOK Post Publishing Bot — English UI (Cloud & Local)
 """
 
 import asyncio
+import base64
 import collections
 import copy
 import hashlib
@@ -17,6 +18,7 @@ import shutil
 import subprocess
 import threading
 import time
+import zlib
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
@@ -135,16 +137,24 @@ WELCOME_START_TEXT = (
 
 # Preserved template for /pinned catalog post feature
 DEFAULT_PINNED_TEMPLATE_TEXT = (
+    "🛍 Добро пожаловать в PÎVOK!\n\n"
+    "Оптовая женская одежда из Лалели, Стамбул.\n"
+    "✨ Эксклюзивные коллекции • 🆕 Новинки каждый день\n\n"
+    "Выбирайте коллекции, уточняйте наличие и оформляйте заказ через WhatsApp или Telegram. 🚀\n\n"
     "🛍 Welcome to PÎVOK!\n\n"
     "Wholesale women's clothing from Laleli, Istanbul.\n"
     "✨ Exclusive collections • 🆕 New arrivals every day\n\n"
-    "Browse our collections, check availability and place your order via WhatsApp or Telegram. 🚀"
+    "Browse our collections, check availability and place your order via WhatsApp or Telegram. 🚀\n\n"
+    "🛍 مرحباً بكم في PÎVOK!\n\n"
+    "ملابس نسائية بالجملة من لالالي، إسطنبول.\n"
+    "✨ مجموعات حصرية • 🆕 موديلات جديدة يومياً\n\n"
+    "تصفحوا مجموعاتنا، تحققوا من التوفر واطلبوا عبر واتساب أو تيليجرام. 🚀"
 )
 
 DEFAULT_PINNED_FIRM_ROWS = [
     [
-        {"text": "MY CLARISSA", "url": "https://t.me/MYCLARISSA", "style": None},
-        {"text": "ONS LINE", "url": "https://t.me/onslinestore", "style": None},
+        {"text": "🆕 MY CLARISSA", "url": "https://t.me/MYCLARISSA", "style": None},
+        {"text": "🆕 ONS LINE", "url": "https://t.me/onslinestore", "style": None},
     ]
 ]
 
@@ -444,6 +454,51 @@ def split_rows_into_presets_and_custom(rows: List[List[dict]]) -> tuple[List[str
     return selected_keys, custom_rows
 
 
+def encode_draft_snapshot(d: dict) -> str:
+    """
+    Compresses rows + text into a compact URL-safe token (<1500 chars) embedded in the
+    Open Editor WebApp URL so preview messages NEVER lose buttons/firms even across Render deploys!
+    """
+    compact_rows = [
+        [[b.get("text", ""), b.get("url", ""), b.get("style")] for b in r]
+        for r in d.get("rows", [])
+    ]
+    full_obj = {
+        "r": compact_rows,
+        "t": d.get("template_text") or "",
+        "m": d.get("media_type"),
+    }
+    raw_full = json.dumps(full_obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    tok_full = base64.urlsafe_b64encode(zlib.compress(raw_full, 9)).decode("ascii").rstrip("=")
+    if len(tok_full) <= 1550:
+        return tok_full
+
+    rows_only = {"r": compact_rows, "m": d.get("media_type")}
+    raw_rows = json.dumps(rows_only, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    tok_rows = base64.urlsafe_b64encode(zlib.compress(raw_rows, 9)).decode("ascii").rstrip("=")
+    return tok_rows if len(tok_rows) <= 1650 else ""
+
+
+def decode_draft_snapshot(token: str) -> Optional[dict]:
+    if not token:
+        return None
+    try:
+        pad = "=" * (-len(token) % 4)
+        raw = zlib.decompress(base64.urlsafe_b64decode(token + pad)).decode("utf-8")
+        obj = json.loads(raw)
+        rows = [
+            [{"text": item[0], "url": item[1], "style": item[2]} for item in r if len(item) >= 3]
+            for r in obj.get("r", [])
+        ]
+        return {
+            "rows": rows,
+            "text": obj.get("t"),
+            "media_type": obj.get("m"),
+        }
+    except Exception:
+        return None
+
+
 def create_new_post_draft(
     uid: int,
     chat_id: int,
@@ -454,7 +509,14 @@ def create_new_post_draft(
     ch_id, ch_lbl = get_saved_channel(uid)
     old_draft = DRAFTS.get(str(uid), {})
     sel_keys = default_selected_preset_keys()
-    rows = build_rows_from_selection(sel_keys, [])
+
+    saved_tpl_rows = STORE.get("saved_rows_template")
+    if isinstance(saved_tpl_rows, list) and len(saved_tpl_rows) > 0:
+        rows = copy.deepcopy(saved_tpl_rows)
+        sel_keys, custom_rows = split_rows_into_presets_and_custom(rows)
+    else:
+        custom_rows = copy.deepcopy(DEFAULT_PINNED_FIRM_ROWS)
+        rows = build_rows_from_selection(sel_keys, custom_rows)
 
     draft = {
         "mode": "post",
@@ -464,7 +526,7 @@ def create_new_post_draft(
         "media_file_id": media_file_id,
         "template_text": text,
         "selected_keys": sel_keys,
-        "custom_rows": [],
+        "custom_rows": custom_rows,
         "rows": rows,
         "auto_sort": False,
         "origin_channel_id": None,
@@ -503,7 +565,9 @@ def build_post_keyboard(uid: int, include_controls: bool = True) -> InlineKeyboa
         pmid = d.get("preview_message_id") or ""
 
         if base_url.startswith("https://"):
-            ed_url = f"{base_url}/?uid={uid}&cid={cid}&pmid={pmid}&v={int(time.time())}"
+            snap = encode_draft_snapshot(d)
+            snap_q = f"&s={snap}" if snap else ""
+            ed_url = f"{base_url}/?uid={uid}&cid={cid}&pmid={pmid}&v={int(time.time())}{snap_q}"
             editor_btn = InlineKeyboardButton(text="Open Editor", web_app=WebAppInfo(url=ed_url))
         else:
             editor_btn = InlineKeyboardButton(text="Open Editor", callback_data="pc_edit_text")
@@ -1222,7 +1286,7 @@ async def health():
     return {
         "status": "ok",
         "service": "PIVOK Post Builder Bot",
-        "version": "v3.5-single-row-preserved",
+        "version": "v3.6-immortal-snapshot",
         "channel": DEFAULT_CHANNEL,
         "language": "en",
         "buttons": [p["text"] for p in PIVOK_BUTTON_PRESETS],
@@ -1271,13 +1335,42 @@ async def api_get_draft(request: Request):
 
     cid = int(data["cid"]) if str(data.get("cid", "")).lstrip("-").isdigit() else uid
     pmid = int(data["pmid"]) if str(data.get("pmid", "")).isdigit() else None
+    snap_tok = str(data.get("s") or "").strip()
 
     d = DRAFTS.get(str(uid))
-    if not d:
-        # Recover gracefully if cloud instance restarted while preview was open in chat
-        d = create_new_post_draft(uid=uid, chat_id=cid, text="")
-        if pmid:
-            d["preview_message_id"] = pmid
+    # If container restarted or user clicked Open Editor on a different preview message,
+    # restore exact rows & text from embedded URL snapshot (or live channel pinned post)
+    if not d or (pmid and d.get("preview_message_id") and d.get("preview_message_id") != pmid and snap_tok):
+        snap_data = decode_draft_snapshot(snap_tok)
+        if snap_data and snap_data.get("rows"):
+            d = create_new_post_draft(
+                uid=uid,
+                chat_id=cid,
+                text=snap_data.get("text") if snap_data.get("text") is not None else "",
+                media_type=snap_data.get("media_type"),
+            )
+            d["rows"] = snap_data["rows"]
+            sel_k, cust_r = split_rows_into_presets_and_custom(d["rows"])
+            d["selected_keys"] = sel_k
+            d["custom_rows"] = cust_r
+            if pmid:
+                d["preview_message_id"] = pmid
+            persist_store()
+        elif not d:
+            ch_id, _ = get_saved_channel(uid)
+            live = await fetch_live_pinned_from_channel(ch_id)
+            d = create_new_post_draft(
+                uid=uid,
+                chat_id=cid,
+                text=(live["text"] if live and live.get("text") else DEFAULT_PINNED_TEMPLATE_TEXT),
+            )
+            if live and live.get("rows"):
+                d["rows"] = live["rows"]
+                sel_k, cust_r = split_rows_into_presets_and_custom(d["rows"])
+                d["selected_keys"] = sel_k
+                d["custom_rows"] = cust_r
+            if pmid:
+                d["preview_message_id"] = pmid
             persist_store()
     else:
         if cid:
@@ -1375,6 +1468,7 @@ async def api_save_draft(request: Request):
             if c_row:
                 cleaned_rows.append(c_row)
         d["rows"] = cleaned_rows
+        STORE["saved_rows_template"] = copy.deepcopy(cleaned_rows)
         sel_keys, custom_rows = split_rows_into_presets_and_custom(cleaned_rows)
         d["selected_keys"] = sel_keys
         d["custom_rows"] = custom_rows

@@ -132,6 +132,7 @@
         const uidParam = urlParams.get('uid') || '';
         const cidParam = urlParams.get('cid') || '';
         const pmIdParam = urlParams.get('pmid') || '';
+        const snapParam = urlParams.get('s') || '';
 
         let rows = [];
         let mediaType = null;
@@ -177,7 +178,8 @@
                 initData: tg.initData,
                 uid: uidParam,
                 cid: cidParam,
-                pmid: pmIdParam
+                pmid: pmIdParam,
+                s: snapParam
             })
         })
         .then(r => r.json())
