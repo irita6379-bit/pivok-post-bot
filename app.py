@@ -1222,7 +1222,7 @@ async def health():
     return {
         "status": "ok",
         "service": "PIVOK Post Builder Bot",
-        "version": "v3.2-row-editor",
+        "version": "v3.3-auto-shift-rows",
         "channel": DEFAULT_CHANNEL,
         "language": "en",
         "buttons": [p["text"] for p in PIVOK_BUTTON_PRESETS],

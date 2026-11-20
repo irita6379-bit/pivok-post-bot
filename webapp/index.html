@@ -412,12 +412,29 @@
             }
         }
 
+        function repackRowsInPairs() {
+            const result = [];
+            let buffer = [];
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].length > 2) {
+                    while (buffer.length > 0) {
+                        result.push(buffer.splice(0, 2));
+                    }
+                    result.push(rows[i]);
+                } else {
+                    buffer.push(...rows[i]);
+                }
+            }
+            while (buffer.length > 0) {
+                result.push(buffer.splice(0, 2));
+            }
+            rows = result;
+        }
+
         function deleteButton(rowIndex, btnIndex) {
             saveInputsToData();
             rows[rowIndex].splice(btnIndex, 1);
-            if (rows[rowIndex].length === 0) {
-                rows.splice(rowIndex, 1);
-            }
+            repackRowsInPairs();
             renderEditor();
         }
 
