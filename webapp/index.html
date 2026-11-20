@@ -136,6 +136,8 @@
         let rows = [];
         let mediaType = null;
         let currentTab = 'editor';
+        let openIconPicker = null;
+        const STICKER_ICONS = ['💬', '📸', '📢', '🔥', '📹', '📍', '✈️', '🆕', '🌸', '💜', '✨', '👗', '💎', '🛍'];
         let sortableRowsInstance = null;
         let sortableButtonsInstances = [];
 
@@ -286,7 +288,17 @@
                         </div>
 
                         <div class="flex-1 space-y-2 min-w-0">
-                            <input type="text" class="input-text w-full text-sm rounded px-2 py-1.5 transition placeholder-gray-500" placeholder="Button title" value="${escapeHtml(btn.text)}">
+                            <div class="flex gap-1.5">
+                                <input type="text" class="input-text w-full text-sm rounded px-2 py-1.5 transition placeholder-gray-500" placeholder="Button title" value="${escapeHtml(btn.text)}">
+                                <button type="button" onclick="toggleIconBar(${rIndex}, ${bIndex})" title="Pick icon" class="px-2.5 py-1.5 rounded text-sm shrink-0 border border-[#4b3f57] bg-[#2d2635] hover:border-[#d6a474]">✨</button>
+                            </div>
+                            ${
+                                openIconPicker === `${rIndex}:${bIndex}`
+                                    ? `<div class="flex flex-wrap gap-1.5 p-2 rounded-lg bg-gray-900/70 border border-gray-600">
+                                           ${STICKER_ICONS.map(ic => `<button type="button" onclick="applyStickerIcon(${rIndex}, ${bIndex}, '${ic}')" class="w-7 h-7 flex items-center justify-center rounded bg-gray-800 hover:bg-[#5d0537] text-sm">${ic}</button>`).join('')}
+                                       </div>`
+                                    : ''
+                            }
                             <div class="flex gap-2">
                                 <input type="url" class="input-url w-full text-sm rounded px-2 py-1.5 transition placeholder-gray-500" placeholder="https://" value="${escapeHtml(btn.url)}">
                                 <select class="select-style w-28 text-sm rounded px-1 py-1.5 transition shrink-0">
@@ -386,6 +398,36 @@
                 });
                 container.appendChild(rowEl);
             });
+        }
+
+        function toggleIconBar(rIndex, bIndex) {
+            saveInputsToData();
+            const key = `${rIndex}:${bIndex}`;
+            openIconPicker = (openIconPicker === key) ? null : key;
+            renderEditor();
+        }
+
+        function applyStickerIcon(rIndex, bIndex, icon) {
+            saveInputsToData();
+            const btn = rows[rIndex] && rows[rIndex][bIndex];
+            if (!btn) return;
+            let txt = (btn.text || '').trim();
+            for (const ic of STICKER_ICONS) {
+                if (txt.startsWith(ic)) {
+                    txt = txt.slice(ic.length).trim();
+                    if (ic === icon) {
+                        btn.text = txt;
+                        openIconPicker = null;
+                        renderEditor();
+                        return;
+                    }
+                    break;
+                }
+            }
+            btn.text = `${icon} ${txt}`.trim();
+            if (icon === '🆕') btn.style = 'success';
+            openIconPicker = null;
+            renderEditor();
         }
 
         function addNewRow() {
