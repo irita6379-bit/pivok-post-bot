@@ -1251,8 +1251,15 @@ async def lifespan(app_inst: FastAPI):
     if bot:
         if PUBLIC_BASE_URL.startswith("https://"):
             wh_url = f"{PUBLIC_BASE_URL}/telegram/webhook"
-            await bot.set_webhook(wh_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=False)
-            logger.info(f"✅ Cloud Webhook registered at {wh_url}")
+            try:
+                info = await bot.get_webhook_info()
+                if info.url != wh_url:
+                    await bot.set_webhook(wh_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=False)
+                    logger.info(f"✅ Cloud Webhook registered at {wh_url}")
+                else:
+                    logger.info(f"⚡ Cloud Webhook already active at {wh_url}")
+            except Exception:
+                await bot.set_webhook(wh_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=False)
         else:
             _start_local_tunnel_thread()
             await bot.delete_webhook(drop_pending_updates=False)
