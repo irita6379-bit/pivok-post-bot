@@ -194,12 +194,116 @@ _env_ids = [
 ALLOWED_USERS: list[int] = list(set(STORE.get("allowed_users", []) + _env_ids))
 DRAFTS: Dict[str, dict] = STORE.setdefault("drafts", {})
 SAVED_BUTTON_LINKS: Dict[str, str] = STORE.setdefault("button_links", {})
+USER_LANGS: Dict[str, str] = STORE.setdefault("user_langs_v4", {})
+
+UI_TEXTS = {
+    "ru": {
+        "welcome": (
+            "<b>Добро пожаловать в конструктор постов PÎVOK!</b>\n\n"
+            "Отправьте любой текст, фото или перешлите пост из другого Telegram-канала, "
+            "чтобы прикрепить к нему кнопки."
+        ),
+        "open_editor": "✏️ Открыть редактор",
+        "send_channel": "📨 Отправить в канал",
+        "update_pinned": "🔄 Обновить закреп в {ch}",
+        "pub_pin": "📌 Опубликовать и закрепить",
+        "cancelled": "Действие отменено. Отправьте текст, фото или перешлите пост.",
+        "already_sent": "⚠️ Этот пост уже отправлен в канал.",
+        "sent_ok": "✅ Пост успешно опубликован в канале <b>{ch}</b>!",
+        "pinned_ok": "📌 Пост опубликован и закреплён в канале <b>{ch}</b>!",
+        "updated_ok": "✅ Закреплённый пост в <b>{ch}</b> успешно обновлён!",
+        "send_err": (
+            "❌ <b>Не удалось отправить пост в {ch}.</b>\n"
+            "Проверьте, что бот добавлен в <b>Администраторы</b> канала с правом публикации.\n\n"
+            "Детали: <code>{e}</code>"
+        ),
+        "lang_prompt": "🌐 <b>Выберите язык интерфейса:</b>",
+        "lang_switched": "🇷🇺 Язык переключён на <b>Русский</b>!",
+    },
+    "tr": {
+        "welcome": (
+            "<b>PÎVOK Post Tasarımcısına Hoş Geldiniz!</b>\n\n"
+            "Buton eklemek için herhangi bir metin, fotoğraf gönderin veya başka bir Telegram kanalından mesaj iletin."
+        ),
+        "open_editor": "✏️ Düzenleyiciyi Aç",
+        "send_channel": "📨 Kanala Gönder",
+        "update_pinned": "🔄 {ch} Sabit Postu Güncelle",
+        "pub_pin": "📌 Yayınla ve Sabitle",
+        "cancelled": "İşlem iptal edildi. Post oluşturmak için metin veya fotoğraf gönderin.",
+        "already_sent": "⚠️ Bu post zaten kanala gönderildi.",
+        "sent_ok": "✅ Post <b>{ch}</b> kanalında başarıyla yayınlandı!",
+        "pinned_ok": "📌 Post <b>{ch}</b> kanalında yayınlandı ve sabitlendi!",
+        "updated_ok": "✅ <b>{ch}</b> kanalındaki sabit post güncellendi!",
+        "send_err": (
+            "❌ <b>{ch} kanalına gönderilemedi.</b>\n"
+            "Botun kanalda <b>Yönetici</b> olduğundan emin olun.\n\n"
+            "Detay: <code>{e}</code>"
+        ),
+        "lang_prompt": "🌐 <b>Arayüz dilini seçin:</b>",
+        "lang_switched": "🇹🇷 Dil <b>Türkçe</b> olarak değiştirildi!",
+    },
+    "ar": {
+        "welcome": (
+            "<b>مرحباً بكم في منشئ منشورات PÎVOK!</b>\n\n"
+            "أرسل أي نص أو صورة أو قم بتحويل منشور من قناة تيليجرام أخرى لإرفاق الأزرار به."
+        ),
+        "open_editor": "✏️ فتح المحرر",
+        "send_channel": "📨 إرسال إلى القناة",
+        "update_pinned": "🔄 تحديث المنشور المثبت في {ch}",
+        "pub_pin": "📌 نشر وتثبيت",
+        "cancelled": "تم الإلغاء. أرسل نصاً أو صورة أو حوّل منشوراً.",
+        "already_sent": "⚠️ تم إرسال هذا المنشور إلى القناة مسبقاً.",
+        "sent_ok": "✅ تم نشر المنشور بنجاح في قناة <b>{ch}</b>!",
+        "pinned_ok": "📌 تم نشر وتثبيت المنشور في قناة <b>{ch}</b>!",
+        "updated_ok": "✅ تم تحديث المنشور المثبت في <b>{ch}</b> بنجاح!",
+        "send_err": (
+            "❌ <b>تعذر النشر في {ch}.</b>\n"
+            "تأكد من إضافة البوت كـ <b>مشرف</b> في القناة.\n\n"
+            "التفاصيل: <code>{e}</code>"
+        ),
+        "lang_prompt": "🌐 <b>اختر لغة الواجهة:</b>",
+        "lang_switched": "🇸🇦 تم تغيير اللغة إلى <b>العربية</b>!",
+    },
+}
+
+
+def get_user_lang(uid: Optional[int]) -> str:
+    if uid is not None:
+        lg = USER_LANGS.get(str(uid))
+        if lg in ("ru", "tr", "ar"):
+            return lg
+    return "ru"
+
+
+def set_user_lang(uid: int, lg: str):
+    if lg in ("ru", "tr", "ar"):
+        USER_LANGS[str(uid)] = lg
+        persist_store()
+
+
+def ui_t(uid: Optional[int], key: str, **kwargs) -> str:
+    lg = get_user_lang(uid)
+    s = UI_TEXTS.get(lg, UI_TEXTS["ru"]).get(key, UI_TEXTS["ru"][key])
+    return s.format(**kwargs) if kwargs else s
+
+
+def lang_switch_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🇷🇺 Русский", callback_data="postlang_ru"),
+                InlineKeyboardButton(text="🇹🇷 Türkçe", callback_data="postlang_tr"),
+                InlineKeyboardButton(text="🇸🇦 العربية", callback_data="postlang_ar"),
+            ]
+        ]
+    )
 
 
 def persist_store():
     STORE["allowed_users"] = ALLOWED_USERS
     STORE["drafts"] = DRAFTS
     STORE["button_links"] = SAVED_BUTTON_LINKS
+    STORE["user_langs_v4"] = USER_LANGS
     _save_store(STORE)
 
 
@@ -560,6 +664,7 @@ def build_post_keyboard(uid: int, include_controls: bool = True) -> InlineKeyboa
             builder.row(*row_btns)
 
     if include_controls and d.get("has_post", True):
+        lg = get_user_lang(uid)
         base_url = get_active_webapp_base_url()
         cid = d.get("chat_id") or uid
         pmid = d.get("preview_message_id") or ""
@@ -567,25 +672,25 @@ def build_post_keyboard(uid: int, include_controls: bool = True) -> InlineKeyboa
         if base_url.startswith("https://"):
             snap = encode_draft_snapshot(d)
             snap_q = f"&s={snap}" if snap else ""
-            ed_url = f"{base_url}/?uid={uid}&cid={cid}&pmid={pmid}&v={int(time.time())}{snap_q}"
-            editor_btn = InlineKeyboardButton(text="Open Editor", web_app=WebAppInfo(url=ed_url))
+            ed_url = f"{base_url}/?lang={lg}&uid={uid}&cid={cid}&pmid={pmid}&v={int(time.time())}{snap_q}"
+            editor_btn = InlineKeyboardButton(text=ui_t(uid, "open_editor"), web_app=WebAppInfo(url=ed_url))
         else:
-            editor_btn = InlineKeyboardButton(text="Open Editor", callback_data="pc_edit_text")
+            editor_btn = InlineKeyboardButton(text=ui_t(uid, "open_editor"), callback_data="pc_edit_text")
 
-        send_btn = InlineKeyboardButton(text="Send to Channel", callback_data="pc_send_new")
+        send_btn = InlineKeyboardButton(text=ui_t(uid, "send_channel"), callback_data="pc_send_new")
         builder.row(editor_btn, send_btn)
 
         if d.get("mode") == "pinned" and d.get("origin_message_id"):
             _, ch_lbl = get_saved_channel(uid)
             builder.row(
                 InlineKeyboardButton(
-                    text=f"Update Pinned Post in {ch_lbl}",
+                    text=ui_t(uid, "update_pinned", ch=ch_lbl),
                     callback_data="pc_update_inplace",
                 )
             )
             builder.row(
                 InlineKeyboardButton(
-                    text="Publish & Pin New Post",
+                    text=ui_t(uid, "pub_pin"),
                     callback_data="pc_send_pin",
                 )
             )
@@ -688,18 +793,58 @@ async def cmd_start(message: Message, state: FSMContext):
                 entry["task"].cancel()
 
     await state.set_state(EditorStates.waiting_for_post)
+    await message.answer("🌸", reply_markup=ReplyKeyboardRemove())
     await message.answer(
-        WELCOME_START_TEXT,
+        ui_t(uid, "welcome"),
         parse_mode="HTML",
-        reply_markup=ReplyKeyboardRemove(),
+        reply_markup=lang_switch_kb(),
     )
+
+
+@dp.message(Command("lang", "language", "dil"))
+async def cmd_post_lang(message: Message):
+    await message.answer(
+        ui_t(message.from_user.id, "lang_prompt"),
+        parse_mode="HTML",
+        reply_markup=lang_switch_kb(),
+    )
+
+
+@dp.callback_query(F.data.in_({"postlang_ru", "postlang_tr", "postlang_ar"}))
+async def cb_post_lang(callback: CallbackQuery):
+    uid = callback.from_user.id
+    lg = callback.data.split("_", 1)[1]
+    set_user_lang(uid, lg)
+    await callback.answer()
+    try:
+        await callback.message.edit_text(
+            ui_t(uid, "lang_switched") + "\n\n" + ui_t(uid, "welcome"),
+            parse_mode="HTML",
+            reply_markup=lang_switch_kb(),
+        )
+    except Exception:
+        await callback.message.answer(
+            ui_t(uid, "lang_switched") + "\n\n" + ui_t(uid, "welcome"),
+            parse_mode="HTML",
+            reply_markup=lang_switch_kb(),
+        )
+    d = DRAFTS.get(str(uid))
+    if d and d.get("preview_message_id") and d.get("chat_id"):
+        try:
+            await bot.edit_message_reply_markup(
+                chat_id=d["chat_id"],
+                message_id=d["preview_message_id"],
+                reply_markup=build_post_keyboard(uid, include_controls=True),
+            )
+        except Exception:
+            pass
 
 
 @dp.message(Command("cancel", "stop"))
 async def cmd_cancel(message: Message, state: FSMContext):
     await state.set_state(EditorStates.waiting_for_post)
     await message.answer(
-        "Action cancelled. Send me any text, photo, or forwarded message to build a post.",
+        ui_t(message.from_user.id, "cancelled"),
         reply_markup=ReplyKeyboardRemove(),
     )
 
@@ -1076,7 +1221,7 @@ async def _publish_to_channel(
 
         if not pin and d.get("last_published_sig") == sig:
             await callback.answer(
-                "⚠️ This post has already been sent to the channel.",
+                ui_t(uid, "already_sent"),
                 show_alert=True,
             )
             return
@@ -1101,24 +1246,21 @@ async def _publish_to_channel(
                     )
                 except Exception:
                     pass
-                await callback.answer("Published & pinned!")
+                await callback.answer("📌")
                 await callback.message.answer(
-                    f"📌 Post has been published and pinned in <b>{ch_lbl}</b>!",
+                    ui_t(uid, "pinned_ok", ch=ch_lbl),
                     parse_mode="HTML",
                 )
             else:
-                await callback.answer("Sent to channel!")
+                await callback.answer("✅")
                 await callback.message.answer(
-                    f"✅ Post has been successfully sent to <b>{ch_lbl}</b>!",
+                    ui_t(uid, "sent_ok", ch=ch_lbl),
                     parse_mode="HTML",
                 )
         except TelegramAPIError as e:
-            await callback.answer("Failed to send post", show_alert=True)
+            await callback.answer("❌", show_alert=True)
             await callback.message.answer(
-                f"❌ <b>Failed to publish post to {ch_lbl}.</b>\n"
-                "Please verify that this bot is added as an <b>Administrator</b> in the channel "
-                "with permission to post messages.\n\n"
-                f"Details: <code>{e}</code>",
+                ui_t(uid, "send_err", ch=ch_lbl, e=str(e)),
                 parse_mode="HTML",
             )
         except Exception as e:
@@ -1293,9 +1435,10 @@ async def health():
     return {
         "status": "ok",
         "service": "PIVOK Post Builder Bot",
-        "version": "v3.6-immortal-snapshot",
+        "version": "v4.1-ru-tr-ar",
         "channel": DEFAULT_CHANNEL,
-        "language": "en",
+        "languages": ["ru", "tr", "ar"],
+        "default_language": "ru",
         "buttons": [p["text"] for p in PIVOK_BUTTON_PRESETS],
         "webhook_mode": PUBLIC_BASE_URL.startswith("https://"),
     }

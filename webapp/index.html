@@ -56,15 +56,9 @@
 
     <!-- Tabs -->
     <div class="flex border-b border-gray-700 bg-[var(--tg-theme-bg-color)] z-10 shrink-0">
-        <button id="tab-editor" onclick="switchTab('editor')" class="flex-1 py-3 text-center tab-active transition text-sm">
-            Editor
-        </button>
-        <button id="tab-text" onclick="switchTab('text')" class="flex-1 py-3 text-center tab-inactive transition text-sm">
-            Post Text
-        </button>
-        <button id="tab-preview" onclick="switchTab('preview')" class="flex-1 py-3 text-center tab-inactive transition text-sm">
-            Preview
-        </button>
+        <button id="tab-editor" onclick="switchTab('editor')" class="flex-1 py-3 text-center tab-active transition text-sm"></button>
+        <button id="tab-text" onclick="switchTab('text')" class="flex-1 py-3 text-center tab-inactive transition text-sm"></button>
+        <button id="tab-preview" onclick="switchTab('preview')" class="flex-1 py-3 text-center tab-inactive transition text-sm"></button>
     </div>
 
     <!-- Main Scroll Container -->
@@ -73,33 +67,33 @@
         <!-- TAB: ROW & BUTTON EDITOR (solastore2026 mechanism in PIVOK colors) -->
         <div id="view-editor" class="block space-y-4">
             <div class="flex justify-between items-center mb-2">
-                <p class="text-sm text-hint">Hold <span class="text-lg">≡</span> to drag and reorder.</p>
+                <p class="text-sm text-hint" id="lbl-drag-hint"></p>
             </div>
 
             <div id="rows-container" class="space-y-6"></div>
 
             <button type="button" onclick="addNewRow()" class="w-full py-3 border-2 border-dashed border-gray-500 rounded-lg text-gray-400 hover:text-white hover:border-[#d6a474] transition flex items-center justify-center gap-2 mt-6">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                Add new row
+                <span id="lbl-add-row"></span>
             </button>
         </div>
 
         <!-- TAB: POST TEXT -->
         <div id="view-text" class="hidden space-y-2.5">
             <div class="flex items-center justify-between">
-                <p class="text-sm text-hint" id="text-mode-label">Edit post text:</p>
+                <p class="text-sm text-hint" id="text-mode-label"></p>
                 <span id="char-counter" class="text-xs font-mono text-gray-400">0 / 4096</span>
             </div>
-            <textarea id="post-text-area" rows="14" oninput="updateCharCounter()" placeholder="Enter post text or photo caption..." class="w-full text-sm rounded-xl p-3 leading-relaxed"></textarea>
+            <textarea id="post-text-area" rows="14" oninput="updateCharCounter()" class="w-full text-sm rounded-xl p-3 leading-relaxed"></textarea>
         </div>
 
         <!-- TAB: PREVIEW -->
         <div id="view-preview" class="hidden">
-            <p class="text-sm text-hint mb-4 text-center">How your post and buttons will look in Telegram:</p>
+            <p class="text-sm text-hint mb-4 text-center" id="lbl-prev-hint"></p>
             <div class="bg-gray-800/50 p-4 rounded-xl border border-gray-700 max-w-sm mx-auto shadow-lg">
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold" style="color:#d6a474;">PIVOK</span>
-                    <span id="preview-media-badge" class="hidden text-[11px] px-2 py-0.5 rounded bg-[#5d0537] text-[#f5d8b8]">📷 Photo / Media</span>
+                    <span id="preview-media-badge" class="hidden text-[11px] px-2 py-0.5 rounded bg-[#5d0537] text-[#f5d8b8]">📷 Media</span>
                 </div>
                 <div id="preview-text-box" class="text-xs text-gray-200 whitespace-pre-wrap mb-3 leading-relaxed max-h-56 overflow-y-auto"></div>
                 <div id="preview-placeholder" class="flex gap-3 mb-4 opacity-50 hidden">
@@ -118,9 +112,7 @@
 
     <!-- Fixed Bottom Bar -->
     <div class="fixed bottom-0 left-0 w-full p-4 bg-gradient-to-t from-[var(--tg-theme-bg-color)] via-[var(--tg-theme-bg-color)] to-transparent shrink-0">
-        <button id="save-btn" type="button" onclick="saveAndClose()" class="w-full btn-pivok py-3.5 rounded-xl font-bold shadow-lg text-lg flex justify-center items-center gap-2">
-            SAVE AND CLOSE
-        </button>
+        <button id="save-btn" type="button" onclick="saveAndClose()" class="w-full btn-pivok py-3.5 rounded-xl font-bold shadow-lg text-lg flex justify-center items-center gap-2"></button>
     </div>
 
     <script>
@@ -129,6 +121,98 @@
         try { tg.enableClosingConfirmation(); } catch (e) {}
 
         const urlParams = new URLSearchParams(window.location.search);
+        const rawLang = (urlParams.get('lang') || 'ru').toLowerCase();
+        const lang = (['ru', 'tr', 'ar'].includes(rawLang)) ? rawLang : 'ru';
+        if (lang === 'ar') document.documentElement.dir = 'rtl';
+
+        const L = {
+            ru: {
+                tabEd: 'Редактор',
+                tabTxt: 'Текст поста',
+                tabPrev: 'Предпросмотр',
+                dragHint: 'Удерживайте ≡ чтобы перемещать.',
+                addRow: 'Добавить новый ряд',
+                editText: 'Текст поста:',
+                editCap: 'Подпись к фото (необязательно):',
+                phPost: 'Введите текст поста или описание фото...',
+                prevHint: 'Так ваш пост и кнопки будут выглядеть в Telegram:',
+                save: 'СОХРАНИТЬ И ЗАКРЫТЬ',
+                saving: 'СОХРАНЕНИЕ...',
+                rowN: (n) => `РЯД ${n}`,
+                delRow: 'Удалить ряд',
+                confirmDelRow: 'Точно удалить весь ряд?',
+                phTitle: 'Название кнопки',
+                stDark: 'Тёмный',
+                stBlue: 'Синий',
+                stGreen: 'Зелёный',
+                stRed: 'Красный',
+                addBtnRow: 'Добавить кнопку в ряд',
+                noBtns: 'Кнопок пока нет',
+                errUrl: 'У одной или нескольких кнопок не указана ссылка (https://)!',
+                errEmptyTxt: 'Текст поста не может быть пустым.'
+            },
+            tr: {
+                tabEd: 'Düzenleyici',
+                tabTxt: 'Post Metni',
+                tabPrev: 'Önizleme',
+                dragHint: 'Taşımak için ≡ basılı tutun.',
+                addRow: 'Yeni satır ekle',
+                editText: 'Post metni:',
+                editCap: 'Fotoğraf açıklaması (isteğe bağlı):',
+                phPost: 'Post metnini veya açıklamayı girin...',
+                prevHint: 'Post ve butonlar Telegram\'da böyle görünecek:',
+                save: 'KAYDET VE KAPAT',
+                saving: 'KAYDEDİLİYOR...',
+                rowN: (n) => `SATIR ${n}`,
+                delRow: 'Satırı sil',
+                confirmDelRow: 'Tüm satır silinsin mi?',
+                phTitle: 'Buton adı',
+                stDark: 'Koyu',
+                stBlue: 'Mavi',
+                stGreen: 'Yeşil',
+                stRed: 'Kırmızı',
+                addBtnRow: 'Satıra buton ekle',
+                noBtns: 'Henüz buton yok',
+                errUrl: 'Bazı butonların linki (https://) eksik!',
+                errEmptyTxt: 'Post metni boş olamaz.'
+            },
+            ar: {
+                tabEd: 'المحرر',
+                tabTxt: 'نص المنشور',
+                tabPrev: 'معاينة',
+                dragHint: 'اضغط مطولاً على ≡ للترتيب.',
+                addRow: 'إضافة صف جديد',
+                editText: 'نص المنشور:',
+                editCap: 'وصف الصورة (اختياري):',
+                phPost: 'أدخل نص المنشور أو وصف الصورة...',
+                prevHint: 'هكذا سيظهر المنشور والأزرار في تيليجرام:',
+                save: 'حفظ وإغلاق',
+                saving: 'جاري الحفظ...',
+                rowN: (n) => `صف ${n}`,
+                delRow: 'حذف الصف',
+                confirmDelRow: 'هل تريد حذف الصف بالكامل؟',
+                phTitle: 'اسم الزر',
+                stDark: 'داكن',
+                stBlue: 'أزرق',
+                stGreen: 'أخضر',
+                stRed: 'أحمر',
+                addBtnRow: 'إضافة زر في الصف',
+                noBtns: 'لا توجد أزرار بعد',
+                errUrl: 'يوجد زر بدون رابط (https://)!',
+                errEmptyTxt: 'لا يمكن ترك نص المنشور فارغاً.'
+            }
+        }[lang];
+
+        document.getElementById('tab-editor').innerText = L.tabEd;
+        document.getElementById('tab-text').innerText = L.tabTxt;
+        document.getElementById('tab-preview').innerText = L.tabPrev;
+        document.getElementById('lbl-drag-hint').innerText = L.dragHint;
+        document.getElementById('lbl-add-row').innerText = L.addRow;
+        document.getElementById('text-mode-label').innerText = L.editText;
+        document.getElementById('post-text-area').placeholder = L.phPost;
+        document.getElementById('lbl-prev-hint').innerText = L.prevHint;
+        document.getElementById('save-btn').innerText = L.save;
+
         const uidParam = urlParams.get('uid') || '';
         const cidParam = urlParams.get('cid') || '';
         const pmIdParam = urlParams.get('pmid') || '';
@@ -191,7 +275,7 @@
             }
             mediaType = data.media_type || null;
             if (mediaType) {
-                document.getElementById('text-mode-label').innerText = `Edit ${mediaType} caption (optional):`;
+                document.getElementById('text-mode-label').innerText = L.editCap;
                 document.getElementById('preview-media-badge').classList.remove('hidden');
             }
             if (typeof data.text === 'string') {
@@ -270,9 +354,9 @@
                         <div class="row-handle text-gray-500 hover:text-white px-2 py-1 cursor-grab">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg>
                         </div>
-                        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">ROW ${rIndex + 1}</span>
+                        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">${L.rowN(rIndex + 1)}</span>
                     </div>
-                    <button type="button" onclick="deleteRow(${rIndex})" class="text-red-400 hover:text-red-300 px-2 py-1 text-sm font-medium">Delete row</button>
+                    <button type="button" onclick="deleteRow(${rIndex})" class="text-red-400 hover:text-red-300 px-2 py-1 text-sm font-medium">${L.delRow}</button>
                 `;
                 rowEl.appendChild(header);
 
@@ -291,7 +375,7 @@
 
                         <div class="flex-1 space-y-2 min-w-0">
                             <div class="flex gap-1.5">
-                                <input type="text" class="input-text w-full text-sm rounded px-2 py-1.5 transition placeholder-gray-500" placeholder="Button title" value="${escapeHtml(btn.text)}">
+                                <input type="text" class="input-text w-full text-sm rounded px-2 py-1.5 transition placeholder-gray-500" placeholder="${escapeHtml(L.phTitle)}" value="${escapeHtml(btn.text)}">
                                 <button type="button" onclick="toggleIconBar(${rIndex}, ${bIndex})" title="Pick icon" class="px-2.5 py-1.5 rounded text-sm shrink-0 border border-[#4b3f57] bg-[#2d2635] hover:border-[#d6a474]">✨</button>
                             </div>
                             ${
@@ -304,10 +388,10 @@
                             <div class="flex gap-2">
                                 <input type="url" class="input-url w-full text-sm rounded px-2 py-1.5 transition placeholder-gray-500" placeholder="https://" value="${escapeHtml(btn.url)}">
                                 <select class="select-style w-28 text-sm rounded px-1 py-1.5 transition shrink-0">
-                                    <option value="" ${!btn.style ? 'selected' : ''}>Dark</option>
-                                    <option value="primary" ${btn.style === 'primary' ? 'selected' : ''}>Blue</option>
-                                    <option value="success" ${btn.style === 'success' ? 'selected' : ''}>Green</option>
-                                    <option value="danger" ${btn.style === 'danger' ? 'selected' : ''}>Red</option>
+                                    <option value="" ${!btn.style ? 'selected' : ''}>${L.stDark}</option>
+                                    <option value="primary" ${btn.style === 'primary' ? 'selected' : ''}>${L.stBlue}</option>
+                                    <option value="success" ${btn.style === 'success' ? 'selected' : ''}>${L.stGreen}</option>
+                                    <option value="danger" ${btn.style === 'danger' ? 'selected' : ''}>${L.stRed}</option>
                                 </select>
                             </div>
                         </div>
@@ -326,7 +410,7 @@
                 addBtnContainer.innerHTML = `
                     <button type="button" onclick="addNewButton(${rIndex})" class="w-full py-2 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 rounded border border-gray-600 transition text-sm flex items-center justify-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                        Add button to row
+                        ${L.addBtnRow}
                     </button>
                 `;
                 rowEl.appendChild(addBtnContainer);
@@ -378,7 +462,7 @@
                 .filter(r => r.length > 0);
 
             if (validRows.length === 0) {
-                container.innerHTML = '<p class="text-center text-gray-500 py-2 text-sm italic">No buttons added</p>';
+                container.innerHTML = `<p class="text-center text-gray-500 py-2 text-sm italic">${L.noBtns}</p>`;
                 return;
             }
 
@@ -449,7 +533,7 @@
         }
 
         function deleteRow(rowIndex) {
-            if (confirm('Delete this entire row?')) {
+            if (confirm(L.confirmDelRow)) {
                 saveInputsToData();
                 rows.splice(rowIndex, 1);
                 renderEditor();
@@ -535,7 +619,7 @@
 
             if (hasInvalidUrl) {
                 switchTab('editor');
-                tg.showAlert('One or more buttons have a title without a URL. Please enter a valid https:// link or remove the button.');
+                tg.showAlert(L.errUrl);
                 return;
             }
 
@@ -543,12 +627,12 @@
             const maxChars = getMaxChars();
             if (postText.length > maxChars) {
                 switchTab('text');
-                tg.showAlert(`Text exceeds maximum length (${postText.length} / ${maxChars} characters).`);
+                tg.showAlert(`${postText.length} / ${maxChars}`);
                 return;
             }
             if (!mediaType && !postText.trim()) {
                 switchTab('text');
-                tg.showAlert('Post text cannot be empty.');
+                tg.showAlert(L.errEmptyTxt);
                 return;
             }
 
@@ -557,7 +641,7 @@
                 .filter(r => r.length > 0);
 
             document.getElementById('save-btn').disabled = true;
-            document.getElementById('save-btn').innerText = 'SAVING...';
+            document.getElementById('save-btn').innerText = L.saving;
 
             fetch('/api/save_draft', {
                 method: 'POST',
@@ -576,15 +660,15 @@
                 if (data.success) {
                     tg.close();
                 } else {
-                    tg.showAlert('Error saving changes: ' + (data.error || 'Unknown error'));
+                    tg.showAlert(data.error || 'Error');
                     document.getElementById('save-btn').disabled = false;
-                    document.getElementById('save-btn').innerText = 'SAVE AND CLOSE';
+                    document.getElementById('save-btn').innerText = L.save;
                 }
             })
             .catch(() => {
-                tg.showAlert('Network error while saving.');
+                tg.showAlert('Network error');
                 document.getElementById('save-btn').disabled = false;
-                document.getElementById('save-btn').innerText = 'SAVE AND CLOSE';
+                document.getElementById('save-btn').innerText = L.save;
             });
         }
     </script>
