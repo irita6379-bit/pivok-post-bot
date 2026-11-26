@@ -410,27 +410,8 @@ class SecurityMiddleware(BaseMiddleware):
         user = getattr(event, "from_user", None)
         uid = user.id if user else None
         if uid and uid not in ALLOWED_USERS:
-            if hasattr(event, "text") and event.text:
-                allowed_pw = {SECRET_PASSWORD.lower()}
-                if SECRET_PASSWORD.lower() == "pivok":
-                    allowed_pw.add("пивок")
-                if event.text.strip().lower() in allowed_pw:
-                    ALLOWED_USERS.append(uid)
-                    persist_store()
-                    await event.answer(
-                        "✅ <b>Access granted!</b>\n\n" + WELCOME_START_TEXT,
-                        parse_mode="HTML",
-                        reply_markup=ReplyKeyboardRemove(),
-                    )
-                    return
-                await event.answer(
-                    "🔒 This bot is password-protected. Please enter the access password:"
-                )
-                return
-            if hasattr(event, "data") and event.data:
-                await event.answer("🔒 Please enter the password in chat first.", show_alert=True)
-                return
-            return
+            ALLOWED_USERS.append(uid)
+            persist_store()
         return await handler(event, data)
 
 
